@@ -14,10 +14,24 @@ static void ppg_ibi_fill_no_event(ppg_ibi_context_t *ctx,
     event->beat_count = ctx->beat_count;
     event->confidence = 0u;
     event->signal_quality = 0u;
-    event->selected_channel = 255u;
+    event->selected_channel = PPG_IBI_SELECTED_CHANNEL_INVALID;
     event->state = ctx->state;
     event->reject_reason = PPG_IBI_REJECT_NONE;
     event->debug_flags = 0u;
+}
+
+static uint8_t ppg_ibi_channel_quality(int32_t raw)
+{
+    if ((raw <= PPG_IBI_PPG_MIN_24BIT) || (raw >= PPG_IBI_PPG_MAX_24BIT)) {
+        return PPG_IBI_CHANNEL_QUALITY_INVALID;
+    }
+
+    if ((raw <= (PPG_IBI_PPG_MIN_24BIT + PPG_IBI_PPG_NEAR_SATURATION_MARGIN)) ||
+        (raw >= (PPG_IBI_PPG_MAX_24BIT - PPG_IBI_PPG_NEAR_SATURATION_MARGIN))) {
+        return PPG_IBI_CHANNEL_QUALITY_LOW;
+    }
+
+    return PPG_IBI_CHANNEL_QUALITY_BASIC_VALID;
 }
 
 static uint8_t ppg_ibi_is_ppg_saturated(const ppg_ibi_sample_t *sample)
@@ -25,11 +39,33 @@ static uint8_t ppg_ibi_is_ppg_saturated(const ppg_ibi_sample_t *sample)
     size_t ch;
 
     for (ch = 0u; ch < (size_t)PPG_IBI_CHANNEL_COUNT; ++ch) {
-        if ((sample->ppg[ch] <= PPG_IBI_PPG_MIN_24BIT) || (sample->ppg[ch] >= PPG_IBI_PPG_MAX_24BIT)) {
+        if (ppg_ibi_channel_quality(sample->ppg[ch]) == PPG_IBI_CHANNEL_QUALITY_INVALID) {
             return 1u;
         }
     }
     return 0u;
+}
+
+static void ppg_ibi_select_channel(const ppg_ibi_sample_t *sample, ppg_ibi_event_t *event)
+{
+    size_t ch;
+    uint8_t best_quality = PPG_IBI_CHANNEL_QUALITY_INVALID;
+    uint8_t best_channel = PPG_IBI_SELECTED_CHANNEL_INVALID;
+
+    for (ch = 0u; ch < (size_t)PPG_IBI_CHANNEL_COUNT; ++ch) {
+        uint8_t quality = ppg_ibi_channel_quality(sample->ppg[ch]);
+        if (quality > best_quality) {
+            best_quality = quality;
+            best_channel = (uint8_t)ch;
+        }
+    }
+
+    event->signal_quality = best_quality;
+    event->selected_channel = best_channel;
+
+    if (best_channel != PPG_IBI_SELECTED_CHANNEL_INVALID) {
+        event->debug_flags |= PPG_IBI_DEBUG_FLAG_CHANNEL_SELECTED;
+    }
 }
 
 void ppg_ibi_config_default(ppg_ibi_config_t *config)
@@ -109,6 +145,7 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,
         }
 
         event->state = ctx->state;
+        ppg_ibi_select_channel(sample, event);
 
         if (ppg_ibi_is_ppg_saturated(sample) != 0u) {
             event->reject_reason = PPG_IBI_REJECT_SATURATED;
@@ -129,6 +166,12 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,
                 event->debug_flags |= PPG_IBI_DEBUG_FLAG_TIMESTAMP_GAP;
             }
         }
+
+        if ((event->reject_reason == PPG_IBI_REJECT_NONE) &&
+            (event->signal_quality < PPG_IBI_SIGNAL_QUALITY_ACCEPT_THRESHOLD)) {
+            event->reject_reason = PPG_IBI_REJECT_LOW_SIGNAL_QUALITY;
+            event->debug_flags |= PPG_IBI_DEBUG_FLAG_LOW_SIGNAL_QUALITY;
+        }
     }
 
     ctx->last_timestamp_ms = sample->timestamp_ms;
@@ -139,7 +182,7 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,
 
 const char *ppg_ibi_version(void)
 {
-    return "0.3.0-m3";
+    return "0.4.0-m4";
 }
 
 size_t ppg_ibi_context_size(void)

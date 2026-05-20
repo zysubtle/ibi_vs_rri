@@ -3,12 +3,14 @@ CFLAGS := -std=c99 -Wall -Wextra -Werror -Iinclude
 
 TARGET_API := build/test_api_compile
 TARGET_INPUT := build/test_input_validation
+TARGET_SIGNAL := build/test_signal_quality
 
 .PHONY: test clean
 
-test: $(TARGET_API) $(TARGET_INPUT)
+test: $(TARGET_API) $(TARGET_INPUT) $(TARGET_SIGNAL)
 	./$(TARGET_API)
 	./$(TARGET_INPUT)
+	./$(TARGET_SIGNAL)
 
 $(TARGET_API): tests/test_api_compile.c src/ppg_ibi.c include/ppg_ibi.h include/ppg_ibi_config.h src/ppg_ibi_internal.h
 	@mkdir -p build
@@ -17,6 +19,10 @@ $(TARGET_API): tests/test_api_compile.c src/ppg_ibi.c include/ppg_ibi.h include/
 $(TARGET_INPUT): tests/test_input_validation.c src/ppg_ibi.c include/ppg_ibi.h include/ppg_ibi_config.h src/ppg_ibi_internal.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) tests/test_input_validation.c src/ppg_ibi.c -o $(TARGET_INPUT)
+
+$(TARGET_SIGNAL): tests/test_signal_quality.c src/ppg_ibi.c include/ppg_ibi.h include/ppg_ibi_config.h src/ppg_ibi_internal.h
+	@mkdir -p build
+	$(CC) $(CFLAGS) tests/test_signal_quality.c src/ppg_ibi.c -o $(TARGET_SIGNAL)
 
 clean:
 	rm -rf build
