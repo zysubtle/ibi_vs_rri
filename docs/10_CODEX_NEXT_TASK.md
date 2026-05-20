@@ -2,41 +2,42 @@
 
 ## 当前 Milestone
 
-M3：输入采样校验与基础数据路径
+M4：基础预处理、轻量 SQI 与主通道选择
 
 ## 本轮任务目标
 
-在 M2 已冻结最小 C API、输入 / 输出结构、状态枚举、reject reason 和资源约束的基础上，实现 `ppg_ibi_process()` 的基础输入数据路径与异常标记逻辑。
+在 M3 已完成基础输入路径的基础上，实现一个**不改变 public API** 的最小 SQI / 主通道选择路径。
 
-本轮重点是让逐点输入路径稳定、可测试、可审查：
+本轮重点是让 no-event 输出中的以下字段具备稳定、可测试的基础含义：
 
-1. `sample_counter` 递增行为；
-2. timestamp 间隔检查；
-3. timestamp gap / sample drop 标记；
-4. 24-bit signed PPG raw 饱和 / 越界标记；
-5. `allow_measure` 门控；
-6. 无有效 IBI 时的 no-event 输出字段一致性；
-7. 最小 host 测试覆盖。
+1. `selected_channel`；
+2. `signal_quality`；
+3. `reject_reason` 中的 `LOW_SIGNAL_QUALITY`；
+4. `debug_flags` 中的低质量 / 通道选择相关内部标记。
 
-M3 完成后，后续 M4 才开始考虑基础预处理、SQI 和主通道选择。
+M4 仍然不输出真实 IBI。`ppg_ibi_process()` 仍必须返回 `PPG_IBI_STATUS_NO_EVENT`，`event.ibi_ms` 仍必须保持 0。
 
 ## 本轮非目标
 
 本轮明确不做：
 
-1. 不做 PPG 滤波；
-2. 不做 SQI；
-3. 不做主通道选择；
-4. 不做脉搏峰检测；
-5. 不计算真实 IBI；
-6. 不输出真实 IBI event；
-7. 不输出 `hr_bpm`；
-8. 不输出 RMSSD / HRV；
-9. 不读取示例 CSV；
-10. 不实现 CLI / GUI / host 评估工具；
-11. 不做 CMSIS-DSP 集成；
-12. 不做 MCU 交叉编译；
-13. 不改变公开 API / 输出字段 / enum 语义。
+1. 不改 public API；
+2. 不修改 public input/output struct 字段；
+3. 不修改 public enum 名称或语义；
+4. 不扩展 public `ppg_ibi_context_t` 字段；
+5. 不实现需要历史 buffer 的 IIR/FIR/bandpass/DC removal；
+6. 不做复杂 SQI；
+7. 不做 FFT / ACF / 峰值检测；
+8. 不计算真实 IBI；
+9. 不返回 `PPG_IBI_STATUS_EVENT_READY`；
+10. 不输出 `hr_bpm`；
+11. 不输出 RMSSD / HRV；
+12. 不读取示例 CSV；
+13. 不实现 CLI / GUI / host 评估工具；
+14. 不引入 CMSIS-DSP；
+15. 不做 MCU 交叉编译。
+
+说明：本轮的“基础预处理”仅限于 raw-range validity / channel score 这类逐样本、无历史缓存的轻量处理。真正滤波、DC removal、滑动窗口 SQI 等需要 context buffer 的工作留到后续里程碑或 S0 决策后再做。
 
 ## 允许修改 / 新增的文件
 
@@ -45,7 +46,9 @@ M3 完成后，后续 M4 才开始考虑基础预处理、SQI 和主通道选择
 ```text
 src/ppg_ibi.c
 src/ppg_ibi_internal.h
-tests/test_api_compile.c
+src/ppg_ibi_signal.c
+src/ppg_ibi_signal.h
+tests/test_signal_quality.c
 tests/test_input_validation.c
 Makefile
 docs/07_TEST_STRATEGY.md
@@ -54,11 +57,12 @@ docs/08_RISK_REVIEW.md
 
 说明：
 
-1. 可以新增 `tests/test_input_validation.c`；
-2. 可以在 `src/ppg_ibi.c` 中新增 static helper 函数；
-3. 可以在 `src/ppg_ibi_internal.h` 中新增内部常量和 debug flag；
-4. 可以更新 Makefile，让 `make test` 同时运行 M2 API compile test 和 M3 input validation test；
-5. 文档更新应保持简洁，只记录 M3 新增测试和风险处理。
+1. 可以新增 `src/ppg_ibi_signal.c` / `src/ppg_ibi_signal.h` 作为内部 helper；
+2. 可以只在 `src/ppg_ibi.c` 中新增 static helper，不强制拆分模块；
+3. 可以新增 `tests/test_signal_quality.c`；
+4. 可以更新 Makefile，让 `make test` 同时运行 M2、M3、M4 测试；
+5. 可以小幅更新 `tests/test_input_validation.c`，但不得降低 M3 覆盖强度；
+6. 文档更新保持简洁，只记录 M4 新增测试和风险处理。
 
 ## 禁止修改的文件 / 范围
 
@@ -79,7 +83,7 @@ docs/11_GIT_WORKFLOW.md
 AGENTS.md
 ```
 
-如果 Codex 认为必须修改 `include/ppg_ibi.h` 或 `include/ppg_ibi_config.h` 才能完成任务，应暂停并报告为 S0，不得擅自修改。
+如果 Codex 认为必须修改 `include/ppg_ibi.h`、`include/ppg_ibi_config.h` 或扩展 `ppg_ibi_context_t` 才能完成任务，应暂停并报告为 S0，不得擅自修改。
 
 ## 已确认项目约束
 
@@ -95,144 +99,133 @@ AGENTS.md
 10. timestamp 单位：ms；
 11. PPG raw：`int32_t`，24-bit signed；
 12. 有效范围：-8,388,608 ~ +8,388,607；
-13. 可能饱和，可能丢样，无无效值标志；
-14. 无 ACC；
-15. 外部传入 `allow_measure`；
-16. `allow_measure=false` 时立即停止输出 IBI；
-17. 恢复 `allow_measure=true` 后进入 `REACQUIRE`；
-18. 目标 MCU：Apollo3.5；
-19. RAM 预算：15–20 KB；
-20. 允许 float，但需记录无 FPU / 运行时间风险；
-21. 禁止 `malloc/calloc/realloc`；
-22. 需要 MISRA 风格限制；
-23. 禁止第三方 PPG / IBI / HR / HRV 算法库；
-24. 允许 C 标准库；
-25. 允许 CMSIS-DSP，但本轮不得使用；
-26. Python 仅可作为 host 测试辅助，且本轮不需要 Python。
+13. 边界值和越界值可保守视为饱和；
+14. 可能饱和，可能丢样，无无效值标志；
+15. 无 ACC；
+16. 外部传入 `allow_measure`；
+17. `allow_measure=false` 时立即停止输出 IBI；
+18. 恢复 `allow_measure=true` 后进入 `REACQUIRE`；
+19. 目标 MCU：Apollo3.5；
+20. RAM 预算：15–20 KB；
+21. 允许 float，但需记录无 FPU / 运行时间风险；
+22. 禁止 `malloc/calloc/realloc`；
+23. 需要 MISRA 风格限制；
+24. 禁止第三方 PPG / IBI / HR / HRV 算法库；
+25. 允许 C 标准库；
+26. 允许 CMSIS-DSP，但本轮不得使用；
+27. Python 仅可作为 host 测试辅助，且本轮不需要 Python。
 
-## M2 已冻结 API，不得改变
+## M2/M3 已冻结行为，不得破坏
 
-M2 已冻结的 API 包括：
+1. `ppg_ibi_process()` 每次处理 1 个样本；
+2. `sample_counter` 从 1 开始递增；
+3. `reset()` 后 sample index 重新从 1 开始；
+4. `allow_measure==0` 时进入 `HOLD`，`reject_reason=ALLOW_MEASURE_FALSE`；
+5. 从 `HOLD` 恢复 `allow_measure!=0` 后进入 `REACQUIRE`；
+6. timestamp 正常 20ms 间隔不触发 reject；
+7. timestamp 大于预期间隔标记 `SAMPLE_DROP` 或 sample-drop debug flag；
+8. timestamp 其他异常标记 `TIMESTAMP_GAP` 或 timestamp-gap debug flag；
+9. 24-bit PPG 边界 / 越界标记 `SATURATED` 或 saturated debug flag；
+10. M4 仍不返回 `PPG_IBI_STATUS_EVENT_READY`；
+11. M4 仍不产生有效 IBI，`ibi_ms == 0`。
 
-```c
-void ppg_ibi_config_default(ppg_ibi_config_t *config);
-ppg_ibi_status_t ppg_ibi_init(ppg_ibi_context_t *ctx, const ppg_ibi_config_t *config);
-ppg_ibi_status_t ppg_ibi_reset(ppg_ibi_context_t *ctx);
-ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,
-                                  const ppg_ibi_sample_t *sample,
-                                  ppg_ibi_event_t *event);
-const char *ppg_ibi_version(void);
-size_t ppg_ibi_context_size(void);
-```
+## M4 实现要求
 
-M3 不得改变函数签名、公开结构体字段、公开 enum 名称或公开常量语义。
+### 1. 最小 raw-range SQI
 
-## M3 实现要求
+请实现逐样本、无历史缓存的通道质量评分。
 
-### 1. no-event 填充一致性
-
-无有效 IBI 时，`ppg_ibi_process()` 仍返回 `PPG_IBI_STATUS_NO_EVENT`，并保证：
-
-```text
-ibi_ms = 0
-beat_count 不增加
-sample_index 与当前 sample_counter 一致
-state 与当前内部状态一致
-reject_reason 表示本样本主要拒绝原因或 NONE
-debug_flags 表示本样本触发的异常标记
-```
-
-本轮不得返回 `PPG_IBI_STATUS_EVENT_READY`。
-
-### 2. sample_counter 行为
-
-每次成功传入非 NULL 且 ctx 已初始化的样本，应递增 sample counter。
-
-建议测试：
-
-1. 第 1 个样本输出 `sample_index == 1`；
-2. 第 2 个样本输出 `sample_index == 2`；
-3. `reset()` 后 sample index 重新从 1 开始。
-
-### 3. allow_measure 门控
-
-保持并测试以下行为：
-
-1. `allow_measure == 0` 时立即停止输出 IBI；
-2. 返回 `PPG_IBI_STATUS_NO_EVENT`；
-3. `event.ibi_ms == 0`；
-4. `event.reject_reason == PPG_IBI_REJECT_ALLOW_MEASURE_FALSE`；
-5. `event.state == PPG_IBI_STATE_HOLD`；
-6. debug flag 包含 allow_measure off 标记；
-7. 从 HOLD 恢复到 `allow_measure != 0` 后，状态进入 `PPG_IBI_STATE_REACQUIRE`。
-
-### 4. timestamp interval 检查
-
-当 `config.allow_timestamp_strict_check != 0` 且已有上一帧 timestamp 时：
-
-1. 相邻 timestamp 间隔等于 `expected_interval_ms` 时，不标记 timestamp reject；
-2. timestamp 间隔小于或不等于预期间隔时，可标记 `PPG_IBI_REJECT_TIMESTAMP_GAP`；
-3. timestamp 间隔大于预期间隔时，应优先标记 `PPG_IBI_REJECT_SAMPLE_DROP` 或至少在 debug flag 中标记 sample drop；
-4. timestamp 反向、异常大跳变或疑似溢出时，应标记 `PPG_IBI_REJECT_TIMESTAMP_GAP` 或 `PPG_IBI_REJECT_SAMPLE_DROP`，不得输出 IBI。
-
-如果同时出现多个异常，M3 可采用简单优先级：
+建议评分规则如下，可以等价实现，但必须可测试、确定、无动态内存：
 
 ```text
-ALLOW_MEASURE_FALSE > SATURATED > SAMPLE_DROP > TIMESTAMP_GAP > NONE
+若 raw <= -8,388,608 或 raw >= +8,388,607：channel_quality = 0，视为 saturated / invalid
+若 raw 接近 24-bit 边界：channel_quality = 20，视为 low quality
+否则：channel_quality = 80，视为 basic-valid quality
 ```
 
-优先级可以作为内部实现，不得改变公开 API。
-
-### 5. PPG raw 饱和 / 越界检查
-
-PPG raw 约束：
+建议定义内部常量：
 
 ```text
-24-bit signed effective range = -8,388,608 ~ +8,388,607
+PPG_IBI_PPG_NEAR_SATURATION_MARGIN
+PPG_IBI_CHANNEL_QUALITY_INVALID = 0
+PPG_IBI_CHANNEL_QUALITY_LOW = 20
+PPG_IBI_CHANNEL_QUALITY_BASIC_VALID = 80
+PPG_IBI_SIGNAL_QUALITY_ACCEPT_THRESHOLD = 50
+PPG_IBI_SELECTED_CHANNEL_INVALID = 255
 ```
 
-M3 至少需要检测：
+这些常量应放在内部文件，例如 `src/ppg_ibi_internal.h` 或内部 signal helper 中，不得放入 public header。
 
-1. 任一通道值小于 -8,388,608；
-2. 任一通道值大于 +8,388,607；
-3. 任一通道值等于 -8,388,608 或 +8,388,607，可保守视为饱和边界；
-4. 出现饱和 / 越界时，不输出 IBI；
-5. `reject_reason` 设置为 `PPG_IBI_REJECT_SATURATED`；
-6. debug flag 包含饱和标记。
+### 2. 主通道选择
 
-内部常量可放在 `src/ppg_ibi_internal.h` 或 `src/ppg_ibi.c`，不得为此修改 public header。
+在 `allow_measure != 0` 且样本未被门控关闭时，从 4 路 PPG 中选择质量分最高的通道：
 
-### 6. 状态行为
+1. 选择 `channel_quality` 最高的通道；
+2. 若并列，选择 index 较小的通道；
+3. 若全部通道 invalid，则 `selected_channel = 255`；
+4. `event.signal_quality = best_channel_quality`；
+5. M4 仍不输出 IBI，因此 `event.confidence` 保持 0。
 
-M3 只做基础状态行为，不实现完整状态机：
+### 3. 与 reject_reason 的关系
 
-1. 初始化后状态为 `INIT`；
-2. 首次有效 allow_measure 样本后可进入 `ACQUIRE`；
-3. allow_measure=false 进入 `HOLD`；
-4. 从 HOLD 恢复 allow_measure=true 后进入 `REACQUIRE`；
-5. timestamp / saturation 等异常不应让算法返回 event ready。
+M4 建议保持简单优先级：
 
-如果需要更复杂状态设计，必须留到 M6，不得在 M3 提前实现完整状态机。
+```text
+ALLOW_MEASURE_FALSE > SATURATED > SAMPLE_DROP > TIMESTAMP_GAP > LOW_SIGNAL_QUALITY > NONE
+```
+
+要求：
+
+1. `allow_measure == 0` 时，不需要计算 SQI / channel selection；
+2. 若任一通道达到 24-bit 边界或越界，可继续保持 M3 的保守策略：`reject_reason = SATURATED`；
+3. 即使存在饱和通道，也可以在 debug / no-event 输出中计算最佳非饱和通道，但不得输出 IBI；
+4. 若没有更高优先级 reject，且 `best_channel_quality < PPG_IBI_SIGNAL_QUALITY_ACCEPT_THRESHOLD`，应设置 `PPG_IBI_REJECT_LOW_SIGNAL_QUALITY`；
+5. 若 `best_channel_quality >= threshold` 且无其他异常，`reject_reason` 应保持 `PPG_IBI_REJECT_NONE`。
+
+### 4. debug_flags
+
+可在内部新增 debug flag，例如：
+
+```text
+PPG_IBI_DEBUG_FLAG_LOW_SIGNAL_QUALITY
+PPG_IBI_DEBUG_FLAG_CHANNEL_SELECTED
+```
+
+要求：
+
+1. 若成功选择了 0–3 的通道，可设置 CHANNEL_SELECTED flag；
+2. 若低质量，可设置 LOW_SIGNAL_QUALITY flag；
+3. debug flag 不得改变 public API。
+
+### 5. 状态行为
+
+M4 只补充 SQI / channel selection，不实现完整状态机：
+
+1. 初始化后状态仍为 `INIT`；
+2. 首次有效 allow_measure 样本后仍可进入 `ACQUIRE`；
+3. allow_measure=false 仍进入 `HOLD`；
+4. 从 HOLD 恢复 allow_measure=true 后仍进入 `REACQUIRE`；
+5. SQI / channel selection 不应让算法返回 `EVENT_READY`。
 
 ## 测试要求
 
 请新增或更新测试，使 `make test` 至少覆盖：
 
 1. M2 API compile smoke test 仍通过；
-2. sample_counter 递增与 reset 后重置；
-3. allow_measure=false no-event 行为；
-4. allow_measure 从 false 恢复 true 后进入 REACQUIRE；
-5. 正常 20 ms timestamp 不触发 timestamp reject；
-6. timestamp 间隔异常触发 `TIMESTAMP_GAP` 或 `SAMPLE_DROP`；
-7. timestamp 间隔大于 20 ms 时至少触发 sample drop 相关 reject 或 debug flag；
-8. PPG raw 到达 24-bit signed 上下边界或越界时触发 `SATURATED`；
-9. M3 仍不返回 `PPG_IBI_STATUS_EVENT_READY`；
-10. M3 仍不产生有效 IBI，`ibi_ms == 0`。
+2. M3 input validation test 仍通过；
+3. allow_measure=false 时 `selected_channel=255`、`signal_quality=0`、`ibi_ms=0`；
+4. allow_measure=true 且 4 路均 basic-valid 时，`selected_channel` 为确定通道，`signal_quality > 0`；
+5. 当某些通道 near-saturation / low quality、某些通道 valid 时，选择质量更高的通道；
+6. 当全部通道 low quality 但未越界时，触发 `LOW_SIGNAL_QUALITY` 或 low-quality debug flag；
+7. 当任一通道 saturated / 越界时，仍触发 `SATURATED` 或 saturated debug flag；
+8. M4 仍不返回 `PPG_IBI_STATUS_EVENT_READY`；
+9. M4 仍不产生有效 IBI，`ibi_ms == 0`；
+10. public headers 无 diff。
 
 建议新增测试文件：
 
 ```text
-tests/test_input_validation.c
+tests/test_signal_quality.c
 ```
 
 测试可以使用 C `assert`，不需要 Python。
@@ -245,9 +238,12 @@ tests/test_input_validation.c
 2. 使用 `-Wall -Wextra -Werror`；
 3. 编译并运行 M2 原有 API compile test；
 4. 编译并运行 M3 input validation test；
-5. 不依赖示例 CSV；
-6. 不依赖 Python；
-7. 不依赖外部库。
+5. 编译并运行 M4 signal quality / channel selection test；
+6. 不依赖示例 CSV；
+7. 不依赖 Python；
+8. 不依赖外部库。
+
+如果新增 `src/ppg_ibi_signal.c`，Makefile 必须把它纳入所有相关测试目标的编译。
 
 ## 文档更新要求
 
@@ -260,10 +256,10 @@ docs/08_RISK_REVIEW.md
 
 更新要求：
 
-1. `docs/07_TEST_STRATEGY.md` 增加 M3 input validation test 说明；
-2. `docs/08_RISK_REVIEW.md` 更新 PPG 饱和、丢样、timestamp gap 的当前处理状态；
+1. `docs/07_TEST_STRATEGY.md` 增加 M4 signal quality / channel selection test 说明；
+2. `docs/08_RISK_REVIEW.md` 更新基础 SQI、主通道选择、无历史缓存、无真实滤波的当前处理状态；
 3. 不要把文档写成长篇论文；
-4. 不要删除长期测试策略，例如示例 CSV smoke test、无 gold standard 限制、Python 标准库规则等内容；如前一版本已压缩，可在 v0.3 中补回简洁版长期规划。
+4. 保留长期测试策略，例如示例 CSV smoke test、无 gold standard 限制、Python 标准库规则。
 
 ## 禁止事项
 
@@ -272,22 +268,23 @@ docs/08_RISK_REVIEW.md
 1. 修改 public API；
 2. 修改 public 输入 / 输出字段；
 3. 修改 public enum 名称或语义；
-4. `malloc` / `calloc` / `realloc`；
-5. 第三方 PPG / IBI / HR / HRV 算法库；
-6. Python 第三方库；
-7. 真实 PPG 峰值检测；
-8. 真实 IBI 计算；
-9. 返回 `PPG_IBI_STATUS_EVENT_READY`；
-10. 输出 `hr_bpm`；
-11. 输出 RMSSD / HRV；
-12. 引入 CMSIS-DSP；
-13. 使用厂商 SDK 特殊数学函数；
-14. 大数组上栈；
-15. 递归；
-16. push；
-17. 创建 PR；
-18. merge / rebase；
-19. 删除远程分支。
+4. 扩展 public `ppg_ibi_context_t` 字段；
+5. `malloc` / `calloc` / `realloc`；
+6. 第三方 PPG / IBI / HR / HRV 算法库；
+7. Python 第三方库；
+8. 真实 PPG 峰值检测；
+9. 真实 IBI 计算；
+10. 返回 `PPG_IBI_STATUS_EVENT_READY`；
+11. 输出 `hr_bpm`；
+12. 输出 RMSSD / HRV；
+13. 引入 CMSIS-DSP；
+14. 使用厂商 SDK 特殊数学函数；
+15. 大数组上栈；
+16. 递归；
+17. push；
+18. 创建 PR；
+19. merge / rebase；
+20. 删除远程分支。
 
 ## 测试命令
 
@@ -304,7 +301,7 @@ make test
 ! grep -R -E "hr_bpm|rmssd|RMSSD" include src tests
 ```
 
-建议额外检查 public header 未被修改：
+必须额外检查 public header 未被修改：
 
 ```bash
 git diff -- include/ppg_ibi.h include/ppg_ibi_config.h
@@ -314,22 +311,22 @@ git diff -- include/ppg_ibi.h include/ppg_ibi_config.h
 
 ## 通过标准
 
-M3 通过需要满足：
+M4 通过需要满足：
 
 1. `make test` 通过；
 2. M2 API compile smoke test 仍通过；
-3. M3 input validation test 通过；
-4. 未修改公开 API / 输出字段 / enum 语义；
-5. `allow_measure=false` 行为正确；
-6. 恢复 allow_measure 后进入 `REACQUIRE`；
-7. sample_counter 行为可测试；
-8. timestamp gap / sample drop 有 reject 或 debug 标记；
-9. 24-bit signed PPG raw 饱和 / 越界有 reject 或 debug 标记；
+3. M3 input validation test 仍通过；
+4. M4 signal quality / channel selection test 通过；
+5. 未修改公开 API / 输出字段 / enum 语义；
+6. 未扩展 public `ppg_ibi_context_t`；
+7. `allow_measure=false` 行为正确；
+8. allow_measure=true 时能得到确定的 `selected_channel` 与 `signal_quality`；
+9. low-quality 与 saturated 场景有 reject 或 debug 标记；
 10. 未输出真实 IBI；
 11. 未返回 `PPG_IBI_STATUS_EVENT_READY`；
 12. 未使用动态内存；
 13. 未引入外部算法依赖；
-14. 文档已更新到 M3 视角；
+14. 文档已更新到 M4 视角；
 15. 没有执行远程 Git 操作。
 
 ## 失败时必须报告的信息
@@ -340,11 +337,12 @@ M3 通过需要满足：
 2. 哪条测试命令失败；
 3. 失败日志；
 4. 是否修改了 public API；
-5. 是否引入了动态内存；
-6. 是否引入了外部依赖；
-7. 是否执行了任何 Git 操作；
-8. 是否需要 Owner 决策；
-9. 建议下一步修复点。
+5. 是否扩展了 public context；
+6. 是否引入了动态内存；
+7. 是否引入了外部依赖；
+8. 是否执行了任何 Git 操作；
+9. 是否需要 Owner 决策；
+10. 建议下一步修复点。
 
 ## Codex 输出摘要要求
 
@@ -358,6 +356,7 @@ Test results
 Known limitations
 是否修改 API：是/否
 是否修改输出字段：是/否
+是否扩展 public context：是/否
 是否引入动态内存：是/否
 是否引入外部依赖：是/否
 是否执行 Git 操作：是/否
