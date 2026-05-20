@@ -1,69 +1,32 @@
-# Test Strategy v0.1
+# Test Strategy v0.2
 
-## 当前测试定位
+## 当前定位
 
-由于当前无 ECG 参考、无人工标注、无 gold standard，本阶段只能做 smoke test 和工程合理性验证。
+无 ECG / 人工标注 / gold standard，当前阶段只做工程可编译与基础行为 smoke test，不宣称准确性。
 
-不得宣称算法准确性。
+## M2 新增测试：API compile test
 
-## 示例数据
+目标：冻结并验证最小 C API 可被外部 C 调用。
 
-Owner 已确认示例数据：
+`make test` 覆盖：
 
-```text
-示例数据_20000.csv
-```
+1. C99 + `-Wall -Wextra -Werror` 编译 `tests/test_api_compile.c` 与 `src/ppg_ibi.c`；
+2. 验证 `ppg_ibi_context_size() > 0`；
+3. 验证 `config_default/init/reset/process/version` 可调用；
+4. 验证 `allow_measure=false` 时返回 `NO_EVENT` 且不产生有效 IBI（`ibi_ms=0`）；
+5. 验证 `NULL` 参数返回确定错误状态。
 
-建议入仓库路径：
+## 约束检查
 
-```text
-tests/fixtures/sample_ppg_20000.csv
-```
+执行：
 
-字段：
+- 禁止动态内存关键字扫描（include/src/tests）；
+- 禁止输出字段关键字扫描：`hr_bpm` / `rmssd` / `RMSSD`（include/src/tests）。
 
-```text
-timestamp_ms, PPG_G1, PPG_G2, PPG_G3, PPG_G4, allow_measure
-```
+## 非目标
 
-## 基础 smoke test 项
+M2 不做：
 
-1. CSV 可读取；
-2. 必要字段存在；
-3. timestamp 间隔约为 20 ms；
-4. 4 路 PPG 数据可解析为 `int32_t`；
-5. `allow_measure` 可解析；
-6. process 可逐点运行；
-7. 输出 event 字段完整；
-8. IBI 在 300–2000 ms；
-9. `allow_measure=false` 时不输出 IBI；
-10. 低质量 / 异常时不输出或降低 confidence。
-
-## 不做的测试
-
-当前不做：
-
-1. MAE；
-2. RMSE；
-3. matched beats；
-4. coverage；
-5. 与 ECG 参考对齐；
-6. 临床准确性证明。
-
-## Python 测试脚本规则
-
-1. Python 只能作为 host 辅助；
-2. 只允许标准库；
-3. 不得替代 C 算法；
-4. 不得依赖 numpy / scipy / pandas 等第三方库。
-
-## 后续建议
-
-M7 可生成 host 评估工具，并输出：
-
-```text
-build/output/ibi_events.csv
-build/output/smoke_summary.txt
-```
-
-具体路径由后续任务文件冻结。
+1. 真实峰值检测正确性；
+2. IBI 准确性指标（MAE/RMSE/matched beats）；
+3. ECG 对齐评估。

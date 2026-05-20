@@ -1,4 +1,4 @@
-# Resource Budget v0.1
+# Resource Budget v0.2
 
 ## 已确认预算
 
@@ -8,42 +8,24 @@
 | FPU | Owner 当前声明无 FPU |
 | RAM | 15–20 KB |
 | ROM | 暂不考虑 |
-| 单次 process 时间 | 暂不考虑 |
-| 功耗 | 暂不考虑 |
-| float | 允许 |
+| float | 允许（记录无 FPU 风险） |
 | malloc/calloc/realloc | 禁止 |
 | MISRA 风格 | 需要 |
 
-## RAM 原则
+## M2 资源冻结结论
 
-1. 算法 context 由 caller 分配；
-2. 不使用动态内存；
-3. 避免大数组上栈；
-4. 缓存长度需在配置中集中定义；
-5. M8 前需形成静态内存估算。
+1. `ppg_ibi_context_t` 由 caller 分配；
+2. 库内不使用动态内存；
+3. 通过 `ppg_ibi_context_size()` 暴露 context 大小供集成检查；
+4. 当前 API 骨架不引入大栈数组与递归。
 
-## 栈原则
+## M2 检查方式
 
-1. 局部变量保持小规模；
-2. 不在函数内定义大数组；
-3. 不使用递归；
-4. host 测试也不得隐藏大栈数组。
+- 编译并运行 `make test`；
+- 运行关键字扫描，确认无 `malloc/calloc/realloc`。
 
-## float 风险
+## 风险记录
 
-Owner 允许 float，但当前声明无 FPU，因此风险包括：
-
-1. 单次 process 时间可能增加；
-2. 功耗可能增加；
-3. 后续可能需要定点化；
-4. CMSIS-DSP 使用方式可能受限。
-
-该风险不阻塞 M1，但应在 M8 复盘。
-
-## M2 需冻结
-
-1. context 结构体大小目标；
-2. 是否允许静态内部缓存；
-3. public API 是否暴露 context size；
-4. 是否支持配置裁剪；
-5. `confidence` / `signal_quality` 使用整数还是 float。
+1. 无 FPU 但允许 float：后续实现阶段需关注运行时间与功耗；
+2. RAM 15–20 KB：M3+ 引入缓冲后需持续复盘 context 增长；
+3. 当前仅 API 骨架，尚未覆盖真实算法资源负载。
