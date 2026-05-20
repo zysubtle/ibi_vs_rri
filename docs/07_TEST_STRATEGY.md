@@ -1,20 +1,35 @@
-# Test Strategy v0.2
+# Test Strategy v0.3
 
 ## 当前定位
 
 无 ECG / 人工标注 / gold standard，当前阶段只做工程可编译与基础行为 smoke test，不宣称准确性。
 
-## M2 新增测试：API compile test
+## M2 测试：API compile test
 
 目标：冻结并验证最小 C API 可被外部 C 调用。
 
-`make test` 覆盖：
+覆盖要点：
 
-1. C99 + `-Wall -Wextra -Werror` 编译 `tests/test_api_compile.c` 与 `src/ppg_ibi.c`；
-2. 验证 `ppg_ibi_context_size() > 0`；
-3. 验证 `config_default/init/reset/process/version` 可调用；
-4. 验证 `allow_measure=false` 时返回 `NO_EVENT` 且不产生有效 IBI（`ibi_ms=0`）；
-5. 验证 `NULL` 参数返回确定错误状态。
+1. C99 + `-Wall -Wextra -Werror`；
+2. `ppg_ibi_context_size() > 0`；
+3. `config_default/init/reset/process/version` 可调用；
+4. `allow_measure=false` 返回 `NO_EVENT` 且 `ibi_ms=0`；
+5. `NULL` 参数返回确定错误状态。
+
+## M3 新增测试：input validation test
+
+目标：验证逐点输入路径基础行为与异常标记。
+
+`make test` 现在覆盖：
+
+1. `sample_counter` 递增、`reset()` 后从 1 重新开始；
+2. `allow_measure=false` 时进入 `HOLD`，`reject_reason=ALLOW_MEASURE_FALSE`；
+3. `allow_measure` 从 false 恢复 true 后进入 `REACQUIRE`；
+4. 正常 20ms 间隔不触发 timestamp reject；
+5. timestamp 小于预期触发 `TIMESTAMP_GAP`；
+6. timestamp 大于预期触发 `SAMPLE_DROP`（或对应 debug flag）；
+7. 24-bit signed PPG 边界值/越界触发 `SATURATED`；
+8. M3 不返回 `EVENT_READY`，且 `ibi_ms` 保持 0。
 
 ## 约束检查
 
@@ -23,10 +38,8 @@
 - 禁止动态内存关键字扫描（include/src/tests）；
 - 禁止输出字段关键字扫描：`hr_bpm` / `rmssd` / `RMSSD`（include/src/tests）。
 
-## 非目标
+## 长期计划（保留）
 
-M2 不做：
-
-1. 真实峰值检测正确性；
-2. IBI 准确性指标（MAE/RMSE/matched beats）；
-3. ECG 对齐评估。
+1. 保留示例 CSV smoke test（`tests/fixtures/sample_ppg_20000.csv`）；
+2. 在无 gold standard 前，不引入准确性指标（MAE/RMSE/matched beats）；
+3. host 侧脚本仅允许 Python 标准库，不引入第三方依赖。
