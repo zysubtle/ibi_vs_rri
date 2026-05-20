@@ -20,6 +20,18 @@ static void ppg_ibi_fill_no_event(ppg_ibi_context_t *ctx,
     event->debug_flags = 0u;
 }
 
+static uint8_t ppg_ibi_is_ppg_saturated(const ppg_ibi_sample_t *sample)
+{
+    size_t ch;
+
+    for (ch = 0u; ch < (size_t)PPG_IBI_CHANNEL_COUNT; ++ch) {
+        if ((sample->ppg[ch] <= PPG_IBI_PPG_MIN_24BIT) || (sample->ppg[ch] >= PPG_IBI_PPG_MAX_24BIT)) {
+            return 1u;
+        }
+    }
+    return 0u;
+}
+
 void ppg_ibi_config_default(ppg_ibi_config_t *config)
 {
     if (config == NULL) {
@@ -98,10 +110,22 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,
 
         event->state = ctx->state;
 
+        if (ppg_ibi_is_ppg_saturated(sample) != 0u) {
+            event->reject_reason = PPG_IBI_REJECT_SATURATED;
+            event->debug_flags |= PPG_IBI_DEBUG_FLAG_PPG_SATURATED;
+        }
+
         if ((ctx->has_last_timestamp != 0u) && (ctx->config.allow_timestamp_strict_check != 0u)) {
             interval_ms = sample->timestamp_ms - ctx->last_timestamp_ms;
-            if (interval_ms != (uint32_t)ctx->config.expected_interval_ms) {
-                event->reject_reason = PPG_IBI_REJECT_TIMESTAMP_GAP;
+            if (interval_ms > (uint32_t)ctx->config.expected_interval_ms) {
+                if (event->reject_reason == PPG_IBI_REJECT_NONE) {
+                    event->reject_reason = PPG_IBI_REJECT_SAMPLE_DROP;
+                }
+                event->debug_flags |= PPG_IBI_DEBUG_FLAG_SAMPLE_DROP;
+            } else if (interval_ms != (uint32_t)ctx->config.expected_interval_ms) {
+                if (event->reject_reason == PPG_IBI_REJECT_NONE) {
+                    event->reject_reason = PPG_IBI_REJECT_TIMESTAMP_GAP;
+                }
                 event->debug_flags |= PPG_IBI_DEBUG_FLAG_TIMESTAMP_GAP;
             }
         }
@@ -115,7 +139,7 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,
 
 const char *ppg_ibi_version(void)
 {
-    return "0.2.0-m2";
+    return "0.3.0-m3";
 }
 
 size_t ppg_ibi_context_size(void)
