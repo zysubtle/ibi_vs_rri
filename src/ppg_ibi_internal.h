@@ -1,0 +1,7 @@
+#ifndef PPG_IBI_INTERNAL_H
+#define PPG_IBI_INTERNAL_H
+
+#define PPG_IBI_DEBUG_FLAG_TIMESTAMP_GAP (1u << 0)
+#define PPG_IBI_DEBUG_FLAG_ALLOW_MEASURE_OFF (1u << 1)
+
+#endif
