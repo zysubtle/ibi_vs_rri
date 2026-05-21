@@ -95,3 +95,11 @@
 2. 库内禁止动态内存；
 3. `process()` 每次处理 1 个样本；
 4. M2 不输出真实 IBI，仅返回 `NO_EVENT` 占位行为。
+
+
+## M5 更新（最小脉搏候选与 IBI 事件）
+
+- 允许在 `ppg_ibi_context_t` 内扩展 detector 历史字段（prev/prev2 raw、timestamp、sample_index、last_pulse 等），不改变 public function signatures。
+- 在门控和质量都通过时，基于 selected channel 执行三点局部峰候选；第二个候选起计算 IBI。
+- 当 IBI 落在 300–2000 ms，`ppg_ibi_process()` 返回 `PPG_IBI_STATUS_EVENT_READY`，并填充 event 的 timestamp/sample_index/ibi_ms/beat_count/confidence/signal_quality/selected_channel/state/reject/debug。
+- 低质量、饱和、timestamp 异常、sample drop、allow_measure=false 时不输出 IBI event。

@@ -29,3 +29,10 @@
 1. 无 FPU 但允许 float：后续实现阶段需关注运行时间与功耗；
 2. RAM 15–20 KB：M3+ 引入缓冲后需持续复盘 context 增长；
 3. 当前仅 API 骨架，尚未覆盖真实算法资源负载。
+
+
+## M5 资源结论补充
+
+- `ppg_ibi_context_t` 增加最小 detector 历史字段，context 大小上升（可由 `ppg_ibi_context_size()` 读取）。
+- 继续保持：无 `malloc/calloc/realloc`、无递归、无大栈数组。
+- 算法仍以逐样本常数级计算为主；无 FPU 目标下 float 风险仍需后续里程碑持续复盘。
