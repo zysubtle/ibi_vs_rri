@@ -67,7 +67,7 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,const ppg_ibi_sample_t *
         }
         if((event->reject_reason==PPG_IBI_REJECT_NONE)&&(event->signal_quality<PPG_IBI_SIGNAL_QUALITY_ACCEPT_THRESHOLD)){ event->reject_reason=PPG_IBI_REJECT_LOW_SIGNAL_QUALITY; event->debug_flags|=PPG_IBI_DEBUG_FLAG_LOW_SIGNAL_QUALITY; strict_reject=1u; }
 
-        if(strict_reject!=0u){ ppg_ibi_reset_detector(ctx); }
+        if(strict_reject!=0u){ ctx->state=PPG_IBI_STATE_REACQUIRE; event->state=ctx->state; ppg_ibi_reset_detector(ctx); }
         else {
             int32_t raw = sample->ppg[event->selected_channel];
             if ((ctx->has_prev_sample != 0u) &&
@@ -86,6 +86,10 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,const ppg_ibi_sample_t *
                         event->ibi_ms = (uint16_t)ibi; event->beat_count=ctx->beat_count;
                         event->state=PPG_IBI_STATE_TRACK; ctx->state=PPG_IBI_STATE_TRACK; event->reject_reason=PPG_IBI_REJECT_NONE;
                         ctx->last_pulse_timestamp_ms=ctx->prev_timestamp_ms; ctx->last_pulse_sample_index=ctx->prev_sample_index;
+                        if(ctx->has_prev_sample!=0u){
+                            ctx->has_prev2_sample=1u; ctx->prev2_raw=ctx->prev_raw; ctx->prev2_selected_channel=ctx->prev_selected_channel; ctx->prev2_signal_quality=ctx->prev_signal_quality; ctx->prev2_timestamp_ms=ctx->prev_timestamp_ms; ctx->prev2_sample_index=ctx->prev_sample_index;
+                        }
+                        ctx->has_prev_sample=1u; ctx->prev_raw=raw; ctx->prev_selected_channel=event->selected_channel; ctx->prev_signal_quality=event->signal_quality; ctx->prev_timestamp_ms=sample->timestamp_ms; ctx->prev_sample_index=ctx->sample_counter;
                         ctx->last_timestamp_ms=sample->timestamp_ms; ctx->has_last_timestamp=1u;
                         return PPG_IBI_STATUS_EVENT_READY;
                     }
