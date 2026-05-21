@@ -57,3 +57,13 @@
 1. 保留示例 CSV smoke test（`tests/fixtures/sample_ppg_20000.csv`）；
 2. 在无 gold standard 前，不引入准确性指标（MAE/RMSE/matched beats）；
 3. host 侧脚本仅允许 Python 标准库，不引入第三方依赖。
+
+
+## M5 测试补充：pulse detector synthetic test
+
+新增 `tests/test_pulse_detector.c`，覆盖：
+- 首个候选峰仅建历史，不产出 IBI；
+- 两个候选峰间隔在 300–2000 ms 时返回 `EVENT_READY`；
+- 校验 event 的 `ibi_ms/timestamp_ms/sample_index/beat_count`；
+- 过短 IBI 触发 `IBI_OUT_OF_RANGE` 且不产出有效 event；
+- `allow_measure=false`、saturated、timestamp drop/gap、low quality 均不产出 event。
