@@ -35,5 +35,19 @@ int main(void){
     assert(e.signal_quality==PPG_IBI_CHANNEL_QUALITY_BASIC_VALID);
     assert(e.confidence==PPG_IBI_CHANNEL_QUALITY_BASIC_VALID);
     assert(e.ibi_ms==320u);
+
+    assert(ppg_ibi_reset(&ctx)==PPG_IBI_STATUS_OK);
+    s=make_sample(3000,100,100,100,100,1); assert(ppg_ibi_process(&ctx,&s,&e)==PPG_IBI_STATUS_NO_EVENT);
+    s=make_sample(3020,250,100,100,100,1); assert(ppg_ibi_process(&ctx,&s,&e)==PPG_IBI_STATUS_NO_EVENT);
+    s=make_sample(3040,100,100,100,100,1); assert(ppg_ibi_process(&ctx,&s,&e)==PPG_IBI_STATUS_NO_EVENT);
+    assert(ctx.has_last_pulse==1u);
+    s=make_sample(3060,250,100,100,100,1); assert(ppg_ibi_process(&ctx,&s,&e)==PPG_IBI_STATUS_NO_EVENT);
+    s=make_sample(3080,100,100,100,100,1); assert(ppg_ibi_process(&ctx,&s,&e)==PPG_IBI_STATUS_NO_EVENT);
+    assert(e.reject_reason==PPG_IBI_REJECT_IBI_OUT_OF_RANGE);
+    assert(e.state==PPG_IBI_STATE_REACQUIRE);
+    assert(ctx.state==PPG_IBI_STATE_REACQUIRE);
+    assert(ctx.has_prev_sample==0u && ctx.has_prev2_sample==0u);
+    assert(ctx.has_last_pulse==0u);
+
     return 0;
 }

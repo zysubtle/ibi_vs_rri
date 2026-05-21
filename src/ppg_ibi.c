@@ -90,13 +90,17 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,const ppg_ibi_sample_t *
                         return PPG_IBI_STATUS_EVENT_READY;
                     }
                     event->reject_reason=PPG_IBI_REJECT_IBI_OUT_OF_RANGE;
-                    ctx->last_pulse_timestamp_ms=ctx->prev_timestamp_ms; ctx->last_pulse_sample_index=ctx->prev_sample_index;
+                    ctx->state=PPG_IBI_STATE_REACQUIRE;
+                    event->state=PPG_IBI_STATE_REACQUIRE;
+                    ppg_ibi_reset_detector(ctx);
                 }
             }
-            if(ctx->has_prev_sample!=0u){
+            if((event->reject_reason==PPG_IBI_REJECT_NONE) && (ctx->has_prev_sample!=0u)){
                 ctx->has_prev2_sample=1u; ctx->prev2_raw=ctx->prev_raw; ctx->prev2_selected_channel=ctx->prev_selected_channel; ctx->prev2_signal_quality=ctx->prev_signal_quality; ctx->prev2_timestamp_ms=ctx->prev_timestamp_ms; ctx->prev2_sample_index=ctx->prev_sample_index;
             }
-            ctx->has_prev_sample=1u; ctx->prev_raw=raw; ctx->prev_selected_channel=event->selected_channel; ctx->prev_signal_quality=event->signal_quality; ctx->prev_timestamp_ms=sample->timestamp_ms; ctx->prev_sample_index=ctx->sample_counter;
+            if(event->reject_reason==PPG_IBI_REJECT_NONE){
+                ctx->has_prev_sample=1u; ctx->prev_raw=raw; ctx->prev_selected_channel=event->selected_channel; ctx->prev_signal_quality=event->signal_quality; ctx->prev_timestamp_ms=sample->timestamp_ms; ctx->prev_sample_index=ctx->sample_counter;
+            }
         }
     }
     ctx->last_timestamp_ms=sample->timestamp_ms; ctx->has_last_timestamp=1u; return PPG_IBI_STATUS_NO_EVENT;
