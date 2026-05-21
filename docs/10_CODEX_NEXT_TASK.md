@@ -1,3 +1,56 @@
+# PR #22 复审追加修复要求 — M8 Fix 5
+
+PR #22 暂不通过。它已经修复了 resource-report、docs/06_RESOURCE_BUDGET.md 和 host 工具目录创建问题，但没有补齐 M8 文档收敛。
+
+## 必须修复
+
+1. 更新 `docs/04_IO_CONTRACT.md` 到 M8 视角：
+   - 保留 public headers、核心常量、输入结构、输出结构、config、state enum、reject reason enum、status enum、public C API；
+   - 修正旧语义，不得再写“M2 不输出真实 IBI，仅返回 NO_EVENT 占位行为”作为当前语义；
+   - 增加当前 `EVENT_READY` 工程语义；
+   - 明确 `EVENT_READY` 只是工程闭环，不代表临床准确性；
+   - 明确不输出 `hr_bpm` / HRV / RMSSD。
+
+2. 更新 `docs/07_TEST_STRATEGY.md` 到 M8 视角：
+   - 保留 `make test` 组成：API compile、input validation、signal quality、pulse detector、state machine；
+   - 增加 `make csv-smoke`：输入 `tests/fixtures/sample_ppg_20000.csv`，输出 `ibi_events.csv` 和 `smoke_summary.txt`；
+   - 增加 `make resource-report`：输出 `build/output/resource_report.txt`；
+   - 列出动态内存扫描、HR/RMSSD 字段扫描、public header diff 检查；
+   - 明确无 gold standard 时不做 MAE/RMSE/matched beats/coverage；
+   - 明确 CSV smoke 只是工程闭环，不是准确性证明。
+
+3. 更新 `docs/08_RISK_REVIEW.md` 到 M8 视角：
+   - 保留风险分级 S0/S1/S2/S3；
+   - 修正旧语义，不得再写“当前不返回 EVENT_READY”；
+   - 保留或重建 S0 触发条件；
+   - 记录无 gold standard、50Hz 限制、无 FPU 但允许 float、外部 allow_measure、最小三点 detector、真实场景漏检/误检风险；
+   - 明确当前不能宣称临床准确性。
+
+4. 保留 PR #22 已完成内容：
+   - `tools/ppg_ibi_csv_smoke.c` 不调用 `system("mkdir -p ...")`；
+   - `Makefile` 的 `csv-smoke` / `resource-report` 创建 `build/output`；
+   - `tools/ppg_ibi_resource_report.c` 输出 resource report；
+   - `docs/06_RESOURCE_BUDGET.md` 的 M8 资源预算内容；
+   - `context_size_within_budget=yes` 当 `context_size_bytes <= ram_budget_max_bytes`。
+
+## 禁止事项
+
+不得修改 public function signatures、`ppg_ibi_event_t`、status/state/reject enum、采样率、通道数、IBI 范围常量、`include/ppg_ibi.h`、`include/ppg_ibi_config.h`。
+
+不得引入 malloc/calloc/realloc、外部依赖或第三方 PPG/IBI/HR/HRV 算法库。
+
+## 必须运行并报告
+
+make test
+make csv-smoke
+make resource-report
+rg -n "\\b(malloc|calloc|realloc)\\s*\\(" include src tests tools
+rg -n "hr_bpm|rmssd|RMSSD" include src tests tools
+git diff -- include/ppg_ibi.h include/ppg_ibi_config.h
+cat build/output/resource_report.txt
+cat build/output/smoke_summary.txt
+
+
 # PR #21 复审追加修复要求 — M8 Fix 4
 
 PR #21 暂不通过。它修复了 host 工具目录创建问题，但没有保留 PR #20 中对 docs/06_RESOURCE_BUDGET.md 的 M8 资源预算收敛。
