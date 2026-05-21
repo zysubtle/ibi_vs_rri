@@ -61,3 +61,10 @@
 ## M5 Fix 2 测试补充
 
 - 新增 `tests/test_pulse_detector.c` 覆盖 channel switch、防跨异常段 IBI、allow_measure/strict reject reset、EVENT_READY 字段一致性与 TRACK 状态。
+
+
+## M7 测试补充：CSV smoke test
+
+- 新增 `make csv-smoke`：编译并运行 `tools/ppg_ibi_csv_smoke.c`，输入 `tests/fixtures/sample_ppg_20000.csv`。
+- 产出 `build/output/ibi_events.csv` 与 `build/output/smoke_summary.txt`。
+- fixture 缺失时应输出 `S1: missing tests/fixtures/sample_ppg_20000.csv` 且非零退出。

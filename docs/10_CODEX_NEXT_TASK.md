@@ -277,3 +277,10 @@ rebase
 ```
 
 如执行本地 commit，必须报告 commit hash。
+
+
+## M7 执行备注（Codex）
+
+- 已实现 host CSV smoke 工具与 `make csv-smoke` 目标。
+- 若后续进入 M8，请由 Owner 更新本文件任务内容。
+

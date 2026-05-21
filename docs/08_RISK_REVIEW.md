@@ -40,3 +40,9 @@
 
 - strict reject 路径（allow_measure=false、saturated、timestamp gap、sample drop、low quality）统一 reset detector history 与 last pulse，降低跨异常段伪 IBI 风险。
 - 最小 detector 仍为工程验证逻辑，无 gold standard，存在漏检/误检残余风险。
+
+
+## M7 风险补充
+
+- host CSV smoke test 仅验证工程闭环与基本 IBI 范围，不构成准确性证明。
+- fixture 数据分布可能与真实佩戴场景不一致，仍需后续多场景回放验证。
