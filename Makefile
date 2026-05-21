@@ -7,7 +7,7 @@ TARGET_SIGNAL := build/test_signal_quality
 TARGET_PULSE := build/test_pulse_detector
 TARGET_STATE := build/test_state_machine
 
-.PHONY: test clean
+.PHONY: test clean csv-smoke
 
 test: $(TARGET_API) $(TARGET_INPUT) $(TARGET_SIGNAL) $(TARGET_PULSE) $(TARGET_STATE)
 	./$(TARGET_API)
@@ -38,3 +38,13 @@ $(TARGET_PULSE): tests/test_pulse_detector.c src/ppg_ibi.c include/ppg_ibi.h inc
 $(TARGET_STATE): tests/test_state_machine.c src/ppg_ibi.c include/ppg_ibi.h include/ppg_ibi_config.h src/ppg_ibi_internal.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) tests/test_state_machine.c src/ppg_ibi.c -o $(TARGET_STATE)
+
+
+TARGET_CSV_SMOKE := build/ppg_ibi_csv_smoke
+
+$(TARGET_CSV_SMOKE): tools/ppg_ibi_csv_smoke.c src/ppg_ibi.c include/ppg_ibi.h include/ppg_ibi_config.h src/ppg_ibi_internal.h
+	@mkdir -p build
+	$(CC) $(CFLAGS) tools/ppg_ibi_csv_smoke.c src/ppg_ibi.c -o $(TARGET_CSV_SMOKE)
+
+csv-smoke: $(TARGET_CSV_SMOKE)
+	./$(TARGET_CSV_SMOKE)
