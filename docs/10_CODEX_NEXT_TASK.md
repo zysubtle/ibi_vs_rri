@@ -1,3 +1,62 @@
+# PR #11 复审追加修复要求 — M6 Fix 4
+
+PR #11 仍未通过。当前阻塞点是：新增状态机测试中的“后续 synthetic pulse 触发第二次 EVENT_READY”场景未通过，且测试本身存在时间戳回退问题，无法有效验证 EVENT_READY 后 history 连续性。
+
+请在当前 M6 修复 PR 分支上继续修复，并且不得回退既有 M6 Fix 3 行为。
+
+## 本轮只修复以下内容
+
+1. 修复 `tests/test_state_machine.c` 中 EVENT_READY 后连续性测试的 synthetic 时间轴：
+   - 第一次合法 `EVENT_READY` 后，下一拍普通合法样本必须使用递增 timestamp；
+   - 不得出现 timestamp 回退，例如在 6360 ms 后又输入 6280 ms；
+   - 该下一拍样本应返回 `PPG_IBI_STATUS_NO_EVENT`；
+   - 断言 `reject_reason != PPG_IBI_REJECT_IBI_OUT_OF_RANGE`。
+
+2. 保留并验证 EVENT_READY 后 history 连续性：
+   - 一次合法 `EVENT_READY` 后，不得在下一拍重复消费同一个 pulse candidate；
+   - 后续只有当下一组新的合法 synthetic pulse 到达时，才允许再次返回 `PPG_IBI_STATUS_EVENT_READY`。
+
+3. 如果修正测试后仍无法通过，才允许对 `src/ppg_ibi.c` 做最小行为修复：
+   - 修复范围仅限 detector history 推进 / EVENT_READY 后连续性；
+   - 不得改变 public API、`ppg_ibi_event_t`、function signatures、status/state/reject enum、采样率、通道数、IBI 范围常量。
+
+4. 必须保留既有 M6 语义：
+   - `allow_measure=false -> HOLD`，并 reset detector history / last pulse；
+   - `SATURATED / TIMESTAMP_GAP / SAMPLE_DROP / LOW_SIGNAL_QUALITY -> REACQUIRE`，并 reset detector history / last pulse；
+   - `IBI_OUT_OF_RANGE -> REACQUIRE`；
+   - `EVENT_READY` 时 `event.state` 与 `ctx->state` 均为 `TRACK`；
+   - `EVENT_READY` 字段对齐到被确认的 pulse candidate 样本。
+
+## 禁止事项
+
+1. 不得修改 public function signatures；
+2. 不得修改 `ppg_ibi_event_t` 字段；
+3. 不得修改 status/state/reject enum；
+4. 不得修改 `include/ppg_ibi_config.h`；
+5. 不得引入 `malloc/calloc/realloc`；
+6. 不得引入外部依赖或第三方 PPG/IBI/HR/HRV 算法库；
+7. 不得实现 HR/HRV/RMSSD 输出；
+8. 不得 push、创建 PR 或 merge。
+
+## 必须运行并报告
+
+```bash
+make test
+rg -n "\\b(malloc|calloc|realloc)\\s*\\(" include src tests
+rg -n "hr_bpm|rmssd|RMSSD" include src tests
+git diff -- include/ppg_ibi_config.h
+```
+
+## 通过标准
+
+1. `make test` 必须通过；
+2. EVENT_READY 后的下一拍普通合法样本必须 `NO_EVENT` 且不是 `IBI_OUT_OF_RANGE`；
+3. 后续新的合法 synthetic pulse group 必须能再次触发 `EVENT_READY`；
+4. strict reject 与 `IBI_OUT_OF_RANGE` 状态语义不得回退；
+5. 禁止项扫描无命中；
+6. `include/ppg_ibi_config.h` 无差异。
+
+
 # PR #10 复审追加修复要求
 
 PR #10 仍未通过，原因是 EVENT_READY 后 history 连续性修复未保留。
