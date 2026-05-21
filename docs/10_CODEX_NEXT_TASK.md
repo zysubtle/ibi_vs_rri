@@ -1,3 +1,36 @@
+# PR #10 复审追加修复要求
+
+PR #10 仍未通过，原因是 EVENT_READY 后 history 连续性修复未保留。
+
+请在当前 PR #10 分支继续修复，并且不得回退现有 M6 Fix 3 的其他要求。
+
+本轮只补以下内容：
+
+1. 在 `ppg_ibi_process()` 的 `EVENT_READY` 返回前推进 detector history，或实现等价机制，确保不会在下一拍重复消费同一个 pulse candidate。
+2. 在 `tests/test_state_machine.c` 中新增测试：
+   - 先构造一次合法 `EVENT_READY`；
+   - 紧接着输入一个普通合法样本；
+   - 断言返回 `PPG_IBI_STATUS_NO_EVENT`；
+   - 断言 `reject_reason != PPG_IBI_REJECT_IBI_OUT_OF_RANGE`；
+   - 再输入下一组合法 synthetic pulse；
+   - 断言只有下一组合法 pulse 才产生新的 `EVENT_READY`。
+3. 保留 `IBI_OUT_OF_RANGE -> REACQUIRE` 行为。
+4. 保留 strict reject 行为：
+   - `SATURATED / TIMESTAMP_GAP / SAMPLE_DROP / LOW_SIGNAL_QUALITY -> REACQUIRE`
+   - `allow_measure=false -> HOLD`
+   - strict reject 后清理 detector history 和 last pulse
+5. 不修改 public function signatures、`ppg_ibi_event_t`、enum、采样率、通道数、IBI 范围常量。
+6. 不引入 `malloc/calloc/realloc`、外部依赖或第三方算法库。
+
+必须运行并报告：
+
+```bash
+make test
+rg -n "\\b(malloc|calloc|realloc)\\s*\\(" include src tests
+rg -n "hr_bpm|rmssd|RMSSD" include src tests
+git diff -- include/ppg_ibi_config.h
+
+
 # docs/10_CODEX_NEXT_TASK.md
 
 ## 当前 Milestone
