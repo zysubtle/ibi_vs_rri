@@ -40,3 +40,8 @@
 
 - strict reject 路径（allow_measure=false、saturated、timestamp gap、sample drop、low quality）统一 reset detector history 与 last pulse，降低跨异常段伪 IBI 风险。
 - 最小 detector 仍为工程验证逻辑，无 gold standard，存在漏检/误检残余风险。
+
+## M6 Fix 2 风险补充
+
+- `IBI_OUT_OF_RANGE` 后强制转入 `REACQUIRE`，降低在 `TRACK` 中持续误跟踪导致的连续假拒绝风险。
+- `EVENT_READY` 返回前补齐 detector history 连续性，降低下一拍重复命中同一 candidate pulse 并触发 `IBI_OUT_OF_RANGE` 的风险。

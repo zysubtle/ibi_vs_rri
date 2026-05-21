@@ -61,3 +61,9 @@
 ## M5 Fix 2 测试补充
 
 - 新增 `tests/test_pulse_detector.c` 覆盖 channel switch、防跨异常段 IBI、allow_measure/strict reject reset、EVENT_READY 字段一致性与 TRACK 状态。
+
+## M6 Fix 2 测试补充
+
+- 新增 `tests/test_state_machine.c`，覆盖 `IBI_OUT_OF_RANGE` 后 `ctx.state/event.state` 必须进入 `REACQUIRE`。
+- 覆盖 `EVENT_READY` 后紧邻普通样本必须为 `NO_EVENT`，且 reject reason 不能为 `IBI_OUT_OF_RANGE`，防止同一 pulse 被重复消费。
+- 覆盖后一组合法 synthetic pulse 才会再次产生新的 `EVENT_READY`，并保留 `allow_measure=false`、`TIMESTAMP_GAP`、`SAMPLE_DROP`、`LOW_SIGNAL_QUALITY` 路径断言。

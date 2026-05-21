@@ -27,6 +27,23 @@ static void ppg_ibi_reset_detector(ppg_ibi_context_t *ctx) {
     ctx->has_last_pulse = 0u; ctx->last_pulse_timestamp_ms = 0u; ctx->last_pulse_sample_index = 0u;
 }
 
+static void ppg_ibi_push_detector_history(ppg_ibi_context_t *ctx, int32_t raw, const ppg_ibi_event_t *event, const ppg_ibi_sample_t *sample) {
+    if (ctx->has_prev_sample != 0u) {
+        ctx->has_prev2_sample = 1u;
+        ctx->prev2_raw = ctx->prev_raw;
+        ctx->prev2_selected_channel = ctx->prev_selected_channel;
+        ctx->prev2_signal_quality = ctx->prev_signal_quality;
+        ctx->prev2_timestamp_ms = ctx->prev_timestamp_ms;
+        ctx->prev2_sample_index = ctx->prev_sample_index;
+    }
+    ctx->has_prev_sample = 1u;
+    ctx->prev_raw = raw;
+    ctx->prev_selected_channel = event->selected_channel;
+    ctx->prev_signal_quality = event->signal_quality;
+    ctx->prev_timestamp_ms = sample->timestamp_ms;
+    ctx->prev_sample_index = ctx->sample_counter;
+}
+
 static uint8_t ppg_ibi_channel_quality(int32_t raw) {
     if ((raw <= PPG_IBI_PPG_MIN_24BIT) || (raw >= PPG_IBI_PPG_MAX_24BIT)) return PPG_IBI_CHANNEL_QUALITY_INVALID;
     if ((raw <= (PPG_IBI_PPG_MIN_24BIT + PPG_IBI_PPG_NEAR_SATURATION_MARGIN)) || (raw >= (PPG_IBI_PPG_MAX_24BIT - PPG_IBI_PPG_NEAR_SATURATION_MARGIN))) return PPG_IBI_CHANNEL_QUALITY_LOW;
@@ -86,17 +103,17 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,const ppg_ibi_sample_t *
                         event->ibi_ms = (uint16_t)ibi; event->beat_count=ctx->beat_count;
                         event->state=PPG_IBI_STATE_TRACK; ctx->state=PPG_IBI_STATE_TRACK; event->reject_reason=PPG_IBI_REJECT_NONE;
                         ctx->last_pulse_timestamp_ms=ctx->prev_timestamp_ms; ctx->last_pulse_sample_index=ctx->prev_sample_index;
+                        ppg_ibi_push_detector_history(ctx, raw, event, sample);
                         ctx->last_timestamp_ms=sample->timestamp_ms; ctx->has_last_timestamp=1u;
                         return PPG_IBI_STATUS_EVENT_READY;
                     }
                     event->reject_reason=PPG_IBI_REJECT_IBI_OUT_OF_RANGE;
+                    ctx->state = PPG_IBI_STATE_REACQUIRE;
+                    event->state = PPG_IBI_STATE_REACQUIRE;
                     ctx->last_pulse_timestamp_ms=ctx->prev_timestamp_ms; ctx->last_pulse_sample_index=ctx->prev_sample_index;
                 }
             }
-            if(ctx->has_prev_sample!=0u){
-                ctx->has_prev2_sample=1u; ctx->prev2_raw=ctx->prev_raw; ctx->prev2_selected_channel=ctx->prev_selected_channel; ctx->prev2_signal_quality=ctx->prev_signal_quality; ctx->prev2_timestamp_ms=ctx->prev_timestamp_ms; ctx->prev2_sample_index=ctx->prev_sample_index;
-            }
-            ctx->has_prev_sample=1u; ctx->prev_raw=raw; ctx->prev_selected_channel=event->selected_channel; ctx->prev_signal_quality=event->signal_quality; ctx->prev_timestamp_ms=sample->timestamp_ms; ctx->prev_sample_index=ctx->sample_counter;
+            ppg_ibi_push_detector_history(ctx, raw, event, sample);
         }
     }
     ctx->last_timestamp_ms=sample->timestamp_ms; ctx->has_last_timestamp=1u; return PPG_IBI_STATUS_NO_EVENT;
