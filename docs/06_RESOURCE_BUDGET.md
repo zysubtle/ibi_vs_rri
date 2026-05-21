@@ -1,37 +1,33 @@
-# Resource Budget v0.2
+# Resource Budget v0.3 (M8)
 
 ## 已确认预算
 
-| 项目 | 预算 / 状态 |
-|---|---|
-| MCU | Apollo3.5 |
-| FPU | Owner 当前声明无 FPU |
-| RAM | 15–20 KB |
-| ROM | 暂不考虑 |
-| float | 允许（记录无 FPU 风险） |
-| malloc/calloc/realloc | 禁止 |
-| MISRA 风格 | 需要 |
+- RAM 预算：15–20 KB（15360–20480 bytes）
+- FPU：Owner 当前声明无 FPU
+- float：允许，但需持续复盘无 FPU 代价
+- 动态内存：禁止
 
-## M2 资源冻结结论
+## M8 实测结论
 
-1. `ppg_ibi_context_t` 由 caller 分配；
-2. 库内不使用动态内存；
-3. 通过 `ppg_ibi_context_size()` 暴露 context 大小供集成检查；
-4. 当前 API 骨架不引入大栈数组与递归。
+- `ppg_ibi_context_size()` 当前实测：`76 bytes`（由 `make resource-report` 输出）。
+- 对比预算：`76 bytes` 明显低于 15–20 KB RAM 预算上限。
+- 库内动态内存：无 `malloc/calloc/realloc`。
+- 大栈数组：当前核心与 smoke/resource 工具均未引入不可控大栈数组。
+- 算法复杂度：逐点 O(1)，无递归。
 
-## M2 检查方式
+## 资源输出文件
 
-- 编译并运行 `make test`；
-- 运行关键字扫描，确认无 `malloc/calloc/realloc`。
+- 命令：`make resource-report`
+- 输出：`build/output/resource_report.txt`
+- 字段：
+  - `context_size_bytes`
+  - `ram_budget_min_bytes`
+  - `ram_budget_max_bytes`
+  - `context_size_within_budget`
+  - `uses_dynamic_memory`
 
-## 风险记录
+## M8 后仍需复盘风险
 
-1. 无 FPU 但允许 float：后续实现阶段需关注运行时间与功耗；
-2. RAM 15–20 KB：M3+ 引入缓冲后需持续复盘 context 增长；
-3. 当前仅 API 骨架，尚未覆盖真实算法资源负载。
-
-## M5 Fix 2 资源结论
-
-- `ppg_ibi_context_t` 增加 detector history 与 last pulse 字段，RAM 增长为常数级。
-- 仍为逐点 O(1) 计算，无动态内存、无递归、无大栈数组。
-- 无 FPU 场景下未引入额外浮点密集计算。
+1. 无 FPU 平台上的 float 指令开销（延时/功耗）仍需在真实 MCU profile 中验证。
+2. 若后续引入更复杂 SQI/检测器历史缓存，需持续跟踪 context 增长。
+3. 目前仅完成工程闭环，不代表真实数据场景下的最终资源峰值。
