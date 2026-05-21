@@ -67,7 +67,11 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,const ppg_ibi_sample_t *
         }
         if((event->reject_reason==PPG_IBI_REJECT_NONE)&&(event->signal_quality<PPG_IBI_SIGNAL_QUALITY_ACCEPT_THRESHOLD)){ event->reject_reason=PPG_IBI_REJECT_LOW_SIGNAL_QUALITY; event->debug_flags|=PPG_IBI_DEBUG_FLAG_LOW_SIGNAL_QUALITY; strict_reject=1u; }
 
-        if(strict_reject!=0u){ ppg_ibi_reset_detector(ctx); }
+        if(strict_reject!=0u){
+            ctx->state = PPG_IBI_STATE_REACQUIRE;
+            event->state = ctx->state;
+            ppg_ibi_reset_detector(ctx);
+        }
         else {
             int32_t raw = sample->ppg[event->selected_channel];
             if ((ctx->has_prev_sample != 0u) &&

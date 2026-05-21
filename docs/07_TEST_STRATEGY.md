@@ -61,3 +61,8 @@
 ## M5 Fix 2 测试补充
 
 - 新增 `tests/test_pulse_detector.c` 覆盖 channel switch、防跨异常段 IBI、allow_measure/strict reject reset、EVENT_READY 字段一致性与 TRACK 状态。
+
+## M6 Fix 1 测试补充
+
+- 新增 `tests/test_state_machine.c`，覆盖 TRACK strict reject（allow_measure=false/timestamp gap/sample drop/low quality）后状态迁移与 detector/last-pulse reset。
+- 覆盖 EVENT_READY 后 history 连续性：避免同一 pulse 重复输出，仅在下一组合法 pulse 到达时输出新 EVENT_READY。

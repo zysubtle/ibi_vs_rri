@@ -40,3 +40,8 @@
 
 - strict reject 路径（allow_measure=false、saturated、timestamp gap、sample drop、low quality）统一 reset detector history 与 last pulse，降低跨异常段伪 IBI 风险。
 - 最小 detector 仍为工程验证逻辑，无 gold standard，存在漏检/误检残余风险。
+
+## M6 Fix 1 风险补充
+
+- 通过新增状态机测试验证 strict reject 样本不会污染 detector history，降低异常恢复阶段跨段伪 IBI 风险。
+- 通过 EVENT_READY 连续性测试约束，降低重复上报同一脉搏事件的工程风险。
