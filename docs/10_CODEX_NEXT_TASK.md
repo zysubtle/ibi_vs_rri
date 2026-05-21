@@ -1,337 +1,290 @@
-# PR #16 复审追加修复要求 — M7 Fix 1
-
-PR #16 暂不通过。当前阻塞点是 CSV fixture/header 与 M7 字段契约不一致，以及 6 列 CSV 解析存在 off-by-one 错误。
-
-## 必须修复
-
-1. M7 fixture 必须包含 6 列 header：
-
-timestamp_ms,PPG_G1,PPG_G2,PPG_G3,PPG_G4,allow_measure
-
-2. 请修复或更新 `tests/fixtures/sample_ppg_20000.csv`：
-   - 保留原有 timestamp 和 4 路 PPG 数据；
-   - 增加 `allow_measure` 列；
-   - 默认可填 1；
-   - 如果需要验证门控，可少量样本填 0；
-   - 不得伪造全新的随机 PPG 数据替代原 fixture。
-
-3. 修复 `tools/ppg_ibi_csv_smoke.c` 的 CSV 解析逻辑：
-   - 正确接受 6 列数据；
-   - 不再把合法 6 列数据误判为 invalid line；
-   - header 校验应以 6 列为标准；
-   - 不建议再 silently fallback 到 5 列 header，除非明确作为兼容模式并在 summary 中报告；
-   - 本轮优先严格按 M7 contract：必须有 allow_measure。
-
-4. `make csv-smoke` 必须基于 6 列 fixture 成功运行。
-
-5. `build/output/smoke_summary.txt` 中应能看到：
-   - parsed_samples > 0
-   - invalid_lines 合理，理想为 0，除非 fixture 有明确异常行
-   - allow_measure_false_samples 字段存在
-   - event_ready_count 字段存在
-   - final_status 字段存在
-
-6. `build/output/ibi_events.csv` header 必须保持：
-
-timestamp_ms,sample_index,ibi_ms,beat_count,confidence,signal_quality,selected_channel,state,reject_reason,debug_flags
-
-不得输出 hr_bpm、rmssd、RMSSD、HRV。
-
-## 禁止事项
-
-不得修改 public function signatures、`ppg_ibi_event_t`、status/state/reject enum、采样率、通道数、IBI 范围常量、`include/ppg_ibi.h`、`include/ppg_ibi_config.h`。
-
-不得修改 `src/ppg_ibi.c` 或算法逻辑，除非发现工具无法调用现有 API，并必须先报告。
-
-不得引入 malloc/calloc/realloc、外部依赖、第三方 PPG/IBI/HR/HRV 算法库。
-
-## 必须运行并报告
-
-make test
-make csv-smoke
-rg -n "\\b(malloc|calloc|realloc)\\s*\\(" include src tests tools
-rg -n "hr_bpm|rmssd|RMSSD" include src tests tools
-git diff -- include/ppg_ibi.h include/ppg_ibi_config.h
-head -1 tests/fixtures/sample_ppg_20000.csv
-cat build/output/smoke_summary.txt
-
-
-# docs/10_CODEX_NEXT_TASK.md
+# docs/10_CODEX_NEXT_TASK.md — M8 任务文件
 
 ## 当前 Milestone
-
-M7：host 端 CSV smoke test、IBI event 导出与基础统计检查
+M8：资源预算审查、代码可读性 / MISRA 风格整理、文档收敛与风险复盘。
 
 ## 背景
-
-M2–M6 已完成：
+M7 已合并。项目当前已具备：
 
 1. 最小 MCU C API；
-2. 逐点 `ppg_ibi_process()`；
-3. 输入校验、timestamp / sample drop / 饱和标记；
-4. 最小 SQI / selected_channel；
-5. 最小三点 pulse candidate 与 IBI event 输出；
-6. 状态机 / strict reject / REACQUIRE 语义收敛。
+2. 逐点 PPG 输入；
+3. timestamp / sample counter / 24-bit raw 基础校验；
+4. 最小 SQI 与主通道选择；
+5. 三点局部峰候选与最小 IBI event 输出；
+6. 状态机与异常恢复语义；
+7. host 端 CSV smoke test 与输出 summary。
 
-M7 的目标不是提升算法准确性，而是建立 host 端 CSV smoke test 闭环，验证算法能在仓库 fixture 上逐点运行并导出工程可检查结果。
+M8 不继续扩展算法能力，而是做工程阶段收敛。
 
-## 重要前置条件
-
-仓库中应存在：
-
-```text
-tests/fixtures/sample_ppg_20000.csv
-```
-
-该 CSV 的字段应为：
-
-```text
-timestamp_ms,PPG_G1,PPG_G2,PPG_G3,PPG_G4,allow_measure
-```
-
-如果该文件不存在，Codex 不得伪造大文件或随机生成同名 fixture。应优先报告：
-
-```text
-S1: missing tests/fixtures/sample_ppg_20000.csv
-```
-
-在文件缺失时，允许仍然实现工具和 Makefile target，但 `make csv-smoke` 必须给出清晰错误信息并非零退出；不得假装 M7 smoke test 通过。
+---
 
 ## 本轮任务目标
 
-实现 host 端 CSV smoke test 工具，读取仓库 fixture，逐点调用 MCU C API，并导出 IBI event 与 summary。
+### 目标 1：代码可读性 / MISRA 风格整理
 
-## 允许修改范围
-
-允许修改：
+对以下文件做必要的可读性整理：
 
 ```text
+src/ppg_ibi.c
+tools/ppg_ibi_csv_smoke.c
+```
+
+要求：
+
+1. 拆分一行多语句；
+2. 拆分过长的 `if` / `switch` / 函数行；
+3. 保持小函数清晰；
+4. 避免行为改变；
+5. 不新增动态内存；
+6. 不改变 public API；
+7. 不改变状态机语义；
+8. 不改变 EVENT_READY、IBI_OUT_OF_RANGE、strict reject 的行为。
+
+如需添加 helper function，只能是内部 `static` helper。
+
+### 目标 2：资源预算复盘
+
+更新或补充资源预算文档：
+
+```text
+docs/06_RESOURCE_BUDGET.md
+```
+
+至少包含：
+
+1. 当前 `ppg_ibi_context_size()` 的实际字节数；
+2. RAM 预算 15–20 KB 的结论；
+3. 当前是否使用动态内存；
+4. 当前是否存在大栈数组；
+5. 当前 float 使用状态；
+6. M8 后仍需复盘的资源风险。
+
+建议新增 host 工具或 Makefile 目标：
+
+```text
+make resource-report
+```
+
+如果新增该目标，输出建议为：
+
+```text
+build/output/resource_report.txt
+```
+
+内容至少包括：
+
+```text
+context_size_bytes=...
+ram_budget_min_bytes=15360
+ram_budget_max_bytes=20480
+context_size_within_budget=yes/no
+uses_dynamic_memory=no
+```
+
+### 目标 3：文档收敛
+
+更新以下文档，使其与 M1–M7 实际状态一致：
+
+```text
+docs/02_MILESTONE_PLAN.md
+docs/04_IO_CONTRACT.md
+docs/06_RESOURCE_BUDGET.md
+docs/07_TEST_STRATEGY.md
+docs/08_RISK_REVIEW.md
+```
+
+文档重点：
+
+1. M0–M7 已完成，M8 为收敛阶段；
+2. 当前已有最小 `EVENT_READY` 工程语义；
+3. 当前不输出 HR / HRV / RMSSD；
+4. 当前 CSV smoke test 只是工程闭环，不是准确性评估；
+5. 当前无 ECG / 人工标注 / gold standard；
+6. 当前 detector 仍为最小 synthetic-first 三点局部峰策略；
+7. 当前 risk review 不得宣称临床准确性。
+
+### 目标 4：阶段验收说明
+
+新增或更新一个阶段验收文档，建议路径：
+
+```text
+docs/12_M8_ACCEPTANCE_REPORT.md
+```
+
+内容至少包括：
+
+1. 当前版本完成了哪些工程能力；
+2. 当前测试命令；
+3. 当前 smoke test 输出路径；
+4. 当前不做什么；
+5. 当前主要风险；
+6. 后续建议：进入真实数据评估 / 算法增强前，需要 gold standard 或标注数据。
+
+---
+
+## 本轮非目标
+
+本轮不得实现以下内容：
+
+1. 不新增滤波、DC removal、滑动窗口 SQI、模板匹配、FFT、ACF；
+2. 不新增复杂峰值检测策略；
+3. 不调参以追求真实数据准确率；
+4. 不读取新的外部数据集；
+5. 不输出 HR、HRV、RMSSD；
+6. 不新增 GUI；
+7. 不新增 Python 第三方依赖；
+8. 不引入 CMSIS-DSP；
+9. 不修改 public API；
+10. 不修改 `tests/fixtures/sample_ppg_20000.csv`，除非发现其格式与 M7 contract 不一致，并必须在 summary 中说明。
+
+---
+
+## 允许修改的文件 / 目录
+
+```text
+src/ppg_ibi.c
 tools/ppg_ibi_csv_smoke.c
 Makefile
+docs/02_MILESTONE_PLAN.md
+docs/04_IO_CONTRACT.md
+docs/06_RESOURCE_BUDGET.md
 docs/07_TEST_STRATEGY.md
 docs/08_RISK_REVIEW.md
 docs/10_CODEX_NEXT_TASK.md
+docs/12_M8_ACCEPTANCE_REPORT.md
 ```
 
-如必须新增目录，可新增：
+如新增资源报告工具，可新增：
 
 ```text
-tools/
-build/output/  # 运行时生成，不应提交构建产物
+tools/ppg_ibi_resource_report.c
 ```
 
-允许新增轻量说明文件：
+如新增 resource output，可由测试运行生成：
 
 ```text
-tools/README.md
+build/output/resource_report.txt
 ```
 
-## 禁止修改范围
+`build/` 产物不要提交。
 
-默认不得修改：
+---
+
+## 禁止修改的文件 / 范围
+
+未经 Owner 明确 S0 决策，不得修改：
 
 ```text
 include/ppg_ibi.h
 include/ppg_ibi_config.h
-src/ppg_ibi.c
-src/ppg_ibi_internal.h
-tests/test_api_compile.c
-tests/test_input_validation.c
-tests/test_signal_quality.c
-tests/test_pulse_detector.c
-tests/test_state_machine.c
 ```
 
-如果 Codex 认为必须修改算法源码或 public API，必须暂停并报告为 S0/S1，不得擅自修改。
+不得修改 public function signatures、`ppg_ibi_event_t`、status/state/reject enum、采样率、通道数、IBI 范围常量。
 
-## 工具设计要求
+不得修改 M6 已收敛语义：
 
-新增 host 工具建议命名：
+1. `allow_measure=false -> HOLD + reset detector/last pulse`；
+2. `SATURATED/TIMESTAMP_GAP/SAMPLE_DROP/LOW_SIGNAL_QUALITY -> REACQUIRE + reset detector/last pulse`；
+3. `IBI_OUT_OF_RANGE -> REACQUIRE + reset detector/last pulse`；
+4. `EVENT_READY` 字段对齐 pulse candidate；
+5. `EVENT_READY` 返回前推进 history，避免下一拍重复消费同一 candidate。
 
-```text
-tools/ppg_ibi_csv_smoke.c
-```
+---
 
-工具输入：
+## 测试命令
 
-```text
-tests/fixtures/sample_ppg_20000.csv
-```
-
-工具输出：
-
-```text
-build/output/ibi_events.csv
-build/output/smoke_summary.txt
-```
-
-工具必须：
-
-1. 使用 C 标准库实现；
-2. 不使用 malloc / calloc / realloc；
-3. 不引入第三方依赖；
-4. 使用固定长度行缓冲；
-5. 对 CSV header 做字段校验；
-6. 逐行解析：
-   - `timestamp_ms` → `uint32_t`
-   - `PPG_G1..PPG_G4` → `int32_t`
-   - `allow_measure` → `uint8_t`
-7. 每行构造 `ppg_ibi_sample_t`；
-8. 调用 `ppg_ibi_process()`；
-9. 统计样本数、allow_measure false 样本数、状态 / reject reason；
-10. 当 `ppg_ibi_process()` 返回 `PPG_IBI_STATUS_EVENT_READY` 时，将 event 写入 CSV；
-11. 只检查 IBI 基本合理性，不做准确性评估。
-
-## 输出 event CSV 要求
-
-`build/output/ibi_events.csv` header 建议为：
-
-```text
-timestamp_ms,sample_index,ibi_ms,beat_count,confidence,signal_quality,selected_channel,state,reject_reason,debug_flags
-```
-
-每个 `EVENT_READY` 写一行。
-
-不得输出：
-
-```text
-hr_bpm
-rmssd
-RMSSD
-HRV
-```
-
-## summary 要求
-
-`build/output/smoke_summary.txt` 至少包含：
-
-```text
-input_path
-total_samples
-parsed_samples
-invalid_lines
-allow_measure_false_samples
-event_ready_count
-ibi_min_ms
-ibi_max_ms
-ibi_out_of_range_events
-reject_allow_measure_false
-reject_low_signal_quality
-reject_saturated
-reject_timestamp_gap
-reject_sample_drop
-reject_ibi_out_of_range
-final_status
-```
-
-如果无 event，`ibi_min_ms` / `ibi_max_ms` 可输出 `NA`。
-
-## Makefile 要求
-
-保留现有 `make test` 行为，并新增 target：
-
-```text
-make csv-smoke
-```
-
-建议：
-
-```text
-make csv-smoke
-```
-
-执行：
-
-1. 编译 `tools/ppg_ibi_csv_smoke.c` + `src/ppg_ibi.c`；
-2. 运行工具；
-3. 输出到 `build/output/`。
-
-可新增：
-
-```text
-make clean
-```
-
-继续清理 `build/`。
-
-## 验收测试命令
-
-Codex 必须运行并报告：
+必须运行并报告：
 
 ```bash
 make test
 make csv-smoke
+```
+
+如果新增 resource-report 目标，必须运行并报告：
+
+```bash
+make resource-report
+```
+
+必须运行并报告：
+
+```bash
 rg -n "\b(malloc|calloc|realloc)\s*\(" include src tests tools
 rg -n "hr_bpm|rmssd|RMSSD" include src tests tools
 git diff -- include/ppg_ibi.h include/ppg_ibi_config.h
+head -1 tests/fixtures/sample_ppg_20000.csv
+cat build/output/smoke_summary.txt
 ```
 
-如果 `tests/fixtures/sample_ppg_20000.csv` 不存在，则：
+如果 `rg` 不存在，可使用等价 `grep -R -E`，但必须说明。
 
-1. `make test` 仍应运行；
-2. `make csv-smoke` 可以失败，但必须是明确的 missing fixture 错误；
-3. Codex 必须在 Test results 中明确报告 fixture 缺失；
-4. 不得生成假的 `sample_ppg_20000.csv`；
-5. 不得判定 M7 完全通过。
+---
 
 ## 通过标准
 
-在 fixture 存在时，M7 通过标准：
-
 1. `make test` 通过；
 2. `make csv-smoke` 通过；
-3. `build/output/ibi_events.csv` 被生成；
-4. `build/output/smoke_summary.txt` 被生成；
-5. summary 中 `parsed_samples > 0`；
-6. 如果存在 event，则所有 `ibi_ms` 在 300–2000 ms；
-7. `allow_measure=false` 时不应输出 event；
-8. 未引入动态内存；
-9. 未引入 HRV / RMSSD / HR 输出字段；
-10. 未修改 public API。
+3. 若新增 `make resource-report`，该目标通过；
+4. `build/output/ibi_events.csv` 存在；
+5. `build/output/smoke_summary.txt` 存在；
+6. summary 中 `parsed_samples > 0`；
+7. summary 中包含 `event_ready_count`、`invalid_lines`、`allow_measure_false_samples`、`final_status`；
+8. 动态内存扫描无命中；
+9. HR/RMSSD 禁用字段扫描无命中；
+10. public headers 无差异；
+11. 文档与实际源码 / 测试状态一致；
+12. 没有新增第三方依赖；
+13. 没有 Git 远程操作。
 
-## 非目标
+---
 
-本轮不做：
+## 失败时必须报告
 
-1. ECG / gold standard 对齐；
-2. MAE / RMSE / matched beats / coverage；
-3. 准确性宣称；
-4. HRV / RMSSD 计算；
-5. `hr_bpm` 输出；
-6. GUI；
-7. 第三方 PPG / IBI / HR / HRV 算法库；
-8. Python 第三方依赖；
-9. 算法增强或滤波优化。
+如果失败，请报告：
 
-## Codex 输出要求
+1. 哪个命令失败；
+2. 失败日志关键行；
+3. 是否涉及 public API；
+4. 是否需要 Owner S0 决策；
+5. 修改文件列表；
+6. 当前是否存在未提交变更。
 
-完成后报告：
+---
 
-1. Summary；
-2. Changed files；
-3. 是否找到 `tests/fixtures/sample_ppg_20000.csv`；
-4. Test commands；
-5. Test results；
-6. 输出文件路径；
-7. event_ready_count；
-8. IBI min/max；
-9. Known limitations；
-10. 是否修改 public API；
-11. 是否引入动态内存；
-12. 是否引入外部依赖；
-13. 是否执行 Git 操作。
+## Codex 输出摘要要求
 
-## Git 限制
+完成后请输出：
 
-Codex 不得：
+```text
+Summary
+Changed files
+Test commands
+Test results
+Known limitations
+Constraint checklist
+是否修改 API
+是否修改输出字段
+是否修改 function signature / enum
+是否引入动态内存
+是否引入外部依赖
+是否执行 Git 操作
+commit hash（如有）
+```
+
+---
+
+## Git / PR 限制
+
+Codex 不得执行：
 
 ```text
 push
 创建 PR
-更新 PR
 merge
 rebase
+squash merge
 删除远程分支
+修改 main/dev 历史
 ```
 
-如执行本地 commit，必须报告 commit hash。
+如果本地 commit，必须报告 commit hash。

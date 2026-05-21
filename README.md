@@ -1,20 +1,24 @@
-# M7 启动更新包 — MCU PPG-IBI
-
-本包用于 Owner 确认“进入 M7”后覆盖仓库当前任务文件。
+# M8 启动更新包
 
 ## 使用方式
 
-1. 解压本 ZIP 到仓库根目录。
-2. 确认仓库中存在：
+1. 将本 ZIP 解压覆盖到仓库根目录。
+2. 确认仓库当前已经合并 M7。
+3. 给 Codex 以下一句话：
 
 ```text
-tests/fixtures/sample_ppg_20000.csv
+请读取 docs/10_CODEX_NEXT_TASK.md，并严格执行。请不要 push、不要创建 PR、不要 merge；完成后报告修改文件和测试结果。
 ```
 
-3. 将 `CODEX_ONE_LINE_COMMAND.md` 中的一句话交给 Codex。
+## 本包内容
+
+```text
+docs/18_M8_START_CARD.md
+docs/10_CODEX_NEXT_TASK.md
+CODEX_ONE_LINE_COMMAND.md
+README.md
+```
 
 ## 注意
 
-本包不包含示例 CSV 数据，不生成源码，只提供 M7 启动卡和 `docs/10_CODEX_NEXT_TASK.md`。
-
-如果示例 CSV 不存在，Codex 不得伪造该文件，应报告缺失。
+M8 是工程收敛阶段，不是新算法增强阶段。
