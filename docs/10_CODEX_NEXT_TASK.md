@@ -1,3 +1,61 @@
+# PR #16 复审追加修复要求 — M7 Fix 1
+
+PR #16 暂不通过。当前阻塞点是 CSV fixture/header 与 M7 字段契约不一致，以及 6 列 CSV 解析存在 off-by-one 错误。
+
+## 必须修复
+
+1. M7 fixture 必须包含 6 列 header：
+
+timestamp_ms,PPG_G1,PPG_G2,PPG_G3,PPG_G4,allow_measure
+
+2. 请修复或更新 `tests/fixtures/sample_ppg_20000.csv`：
+   - 保留原有 timestamp 和 4 路 PPG 数据；
+   - 增加 `allow_measure` 列；
+   - 默认可填 1；
+   - 如果需要验证门控，可少量样本填 0；
+   - 不得伪造全新的随机 PPG 数据替代原 fixture。
+
+3. 修复 `tools/ppg_ibi_csv_smoke.c` 的 CSV 解析逻辑：
+   - 正确接受 6 列数据；
+   - 不再把合法 6 列数据误判为 invalid line；
+   - header 校验应以 6 列为标准；
+   - 不建议再 silently fallback 到 5 列 header，除非明确作为兼容模式并在 summary 中报告；
+   - 本轮优先严格按 M7 contract：必须有 allow_measure。
+
+4. `make csv-smoke` 必须基于 6 列 fixture 成功运行。
+
+5. `build/output/smoke_summary.txt` 中应能看到：
+   - parsed_samples > 0
+   - invalid_lines 合理，理想为 0，除非 fixture 有明确异常行
+   - allow_measure_false_samples 字段存在
+   - event_ready_count 字段存在
+   - final_status 字段存在
+
+6. `build/output/ibi_events.csv` header 必须保持：
+
+timestamp_ms,sample_index,ibi_ms,beat_count,confidence,signal_quality,selected_channel,state,reject_reason,debug_flags
+
+不得输出 hr_bpm、rmssd、RMSSD、HRV。
+
+## 禁止事项
+
+不得修改 public function signatures、`ppg_ibi_event_t`、status/state/reject enum、采样率、通道数、IBI 范围常量、`include/ppg_ibi.h`、`include/ppg_ibi_config.h`。
+
+不得修改 `src/ppg_ibi.c` 或算法逻辑，除非发现工具无法调用现有 API，并必须先报告。
+
+不得引入 malloc/calloc/realloc、外部依赖、第三方 PPG/IBI/HR/HRV 算法库。
+
+## 必须运行并报告
+
+make test
+make csv-smoke
+rg -n "\\b(malloc|calloc|realloc)\\s*\\(" include src tests tools
+rg -n "hr_bpm|rmssd|RMSSD" include src tests tools
+git diff -- include/ppg_ibi.h include/ppg_ibi_config.h
+head -1 tests/fixtures/sample_ppg_20000.csv
+cat build/output/smoke_summary.txt
+
+
 # docs/10_CODEX_NEXT_TASK.md
 
 ## 当前 Milestone
