@@ -95,3 +95,9 @@
 2. 库内禁止动态内存；
 3. `process()` 每次处理 1 个样本；
 4. M2 不输出真实 IBI，仅返回 `NO_EVENT` 占位行为。
+
+## M5 Fix 2 更新
+
+- 新增最小三点历史 detector 语义：仅在连续 3 点 selected_channel 一致且中点为局部峰时形成 pulse candidate。
+- EVENT_READY 字段与被确认 candidate（prev 样本）严格对齐，不改变 event 字段与函数签名。
+- 允许扩展 `ppg_ibi_context_t` 内部历史字段，不改变公开 API。
