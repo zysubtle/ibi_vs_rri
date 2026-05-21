@@ -1,13 +1,13 @@
-# IO Contract v0.2
+# IO Contract v0.3 (M8)
 
-本文件冻结 M2 阶段最小 C API、输入输出字段、状态枚举与 reject reason。
+本文件冻结当前公开 C API、输入输出字段、状态/拒绝原因枚举与工程语义（M8 收敛版）。
 
 ## 公开头文件
 
 - `include/ppg_ibi.h`
 - `include/ppg_ibi_config.h`
 
-## 常量
+## 核心常量
 
 - `PPG_IBI_CHANNEL_COUNT = 4`
 - `PPG_IBI_SAMPLE_RATE_HZ = 50`
@@ -19,8 +19,8 @@
 
 `ppg_ibi_sample_t`:
 
-- `uint32_t timestamp_ms`（ms）
-- `int32_t ppg[4]`（4 路同步 PPG raw, 24-bit signed 存放于 int32）
+- `uint32_t timestamp_ms`（单位 ms）
+- `int32_t ppg[4]`（4 路同步 PPG raw，24-bit signed 存放于 int32）
 - `uint8_t allow_measure`（0=false，非 0=true）
 
 ## 输出结构
@@ -38,7 +38,7 @@
 - `ppg_ibi_reject_reason_t reject_reason`
 - `uint32_t debug_flags`
 
-约束：当前不输出 `hr_bpm`、RMSSD、HRV。无有效 IBI 时 `ibi_ms=0`。
+约束：当前不输出 `hr_bpm`、HRV、RMSSD。无有效 IBI 时 `ibi_ms=0`。
 
 ## 状态枚举
 
@@ -80,7 +80,7 @@
 - `uint16_t max_ibi_ms`（默认 2000）
 - `uint8_t allow_timestamp_strict_check`（默认 1）
 
-## 最小 C API
+## Public C API
 
 - `void ppg_ibi_config_default(ppg_ibi_config_t *config);`
 - `ppg_ibi_status_t ppg_ibi_init(ppg_ibi_context_t *ctx, const ppg_ibi_config_t *config);`
@@ -89,15 +89,13 @@
 - `const char *ppg_ibi_version(void);`
 - `size_t ppg_ibi_context_size(void);`
 
-语义冻结：
+## 当前工程语义（M8）
 
-1. context 由调用方分配；
-2. 库内禁止动态内存；
-3. `process()` 每次处理 1 个样本；
-4. M2 不输出真实 IBI，仅返回 `NO_EVENT` 占位行为。
-
-## M5 Fix 2 更新
-
-- 新增最小三点历史 detector 语义：仅在连续 3 点 selected_channel 一致且中点为局部峰时形成 pulse candidate。
-- EVENT_READY 字段与被确认 candidate（prev 样本）严格对齐，不改变 event 字段与函数签名。
-- 允许扩展 `ppg_ibi_context_t` 内部历史字段，不改变公开 API。
+1. context 由调用方分配；库内禁止动态内存。
+2. `process()` 每次只处理 1 个样本。
+3. 当前实现已支持最小三点局部峰 detector 与逐搏事件路径，`PPG_IBI_STATUS_EVENT_READY` 为“工程闭环”语义：
+   - 表示该样本处理后形成了可输出的 IBI event；
+   - event 字段与被确认的 pulse candidate 对齐；
+   - 返回前会推进 history，避免下一拍重复消费同一 candidate。
+4. `EVENT_READY` 仅代表工程流程闭环，不代表临床准确性验证完成。
+5. 本项目当前仍不输出 `hr_bpm` / HRV / RMSSD。

@@ -1,13 +1,11 @@
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "ppg_ibi.h"
 
 #define INPUT_PATH "tests/fixtures/sample_ppg_20000.csv"
-#define OUTPUT_DIR "build/output"
 #define OUTPUT_EVENTS "build/output/ibi_events.csv"
 #define OUTPUT_SUMMARY "build/output/smoke_summary.txt"
 #define LINE_BUF_SIZE 512
@@ -65,8 +63,7 @@ int main(void) {
         return 1;
     }
 
-    (void)system("mkdir -p " OUTPUT_DIR);
-    events = fopen(OUTPUT_EVENTS, "w");
+        events = fopen(OUTPUT_EVENTS, "w");
     summary = fopen(OUTPUT_SUMMARY, "w");
     if (events == NULL || summary == NULL) {
         fclose(in);
