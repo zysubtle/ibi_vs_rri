@@ -1,4 +1,4 @@
-# Risk Review v0.4
+# Risk Review v0.5
 
 ## 风险分级
 
@@ -26,7 +26,7 @@
 2. 主通道选择：每样本在 4 路中选最高质量通道，同分取最小 index，保证确定性；
 3. 低质量处理：在无更高优先级 reject 时，`signal_quality<threshold` 触发 `LOW_SIGNAL_QUALITY`；
 4. 饱和优先：任一路达到 24-bit 边界或越界仍优先触发 `SATURATED`；
-5. 算法边界：当前仍不输出真实 IBI，不返回 `EVENT_READY`。
+5. 算法边界：已提供最小 `EVENT_READY` 工程语义（用于状态机验证），仍不输出 HR/HRV/RMSSD，也不宣称临床准确性。
 
 ## S0 触发条件（保持不变）
 
@@ -40,3 +40,9 @@
 
 - strict reject 路径（allow_measure=false、saturated、timestamp gap、sample drop、low quality）统一 reset detector history 与 last pulse，降低跨异常段伪 IBI 风险。
 - 最小 detector 仍为工程验证逻辑，无 gold standard，存在漏检/误检残余风险。
+
+
+## M6 Fix 6 风险补充
+
+- strict reject（含 `IBI_OUT_OF_RANGE`）统一进入 `REACQUIRE` 并清理 detector history / last pulse，降低异常段后伪 IBI 风险。
+- `EVENT_READY` 前推进 history，降低重复消费同一 pulse candidate 导致连续误报的风险。
