@@ -7,7 +7,7 @@ TARGET_SIGNAL := build/test_signal_quality
 TARGET_PULSE := build/test_pulse_detector
 TARGET_STATE := build/test_state_machine
 
-.PHONY: test clean csv-smoke
+.PHONY: test clean csv-smoke resource-report
 
 test: $(TARGET_API) $(TARGET_INPUT) $(TARGET_SIGNAL) $(TARGET_PULSE) $(TARGET_STATE)
 	./$(TARGET_API)
@@ -48,3 +48,13 @@ $(TARGET_CSV_SMOKE): tools/ppg_ibi_csv_smoke.c src/ppg_ibi.c include/ppg_ibi.h i
 
 csv-smoke: $(TARGET_CSV_SMOKE)
 	./$(TARGET_CSV_SMOKE)
+
+
+TARGET_RESOURCE_REPORT := build/ppg_ibi_resource_report
+
+$(TARGET_RESOURCE_REPORT): tools/ppg_ibi_resource_report.c src/ppg_ibi.c include/ppg_ibi.h include/ppg_ibi_config.h src/ppg_ibi_internal.h
+	@mkdir -p build
+	$(CC) $(CFLAGS) tools/ppg_ibi_resource_report.c src/ppg_ibi.c -o $(TARGET_RESOURCE_REPORT)
+
+resource-report: $(TARGET_RESOURCE_REPORT)
+	./$(TARGET_RESOURCE_REPORT)
