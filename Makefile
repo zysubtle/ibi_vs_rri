@@ -6,8 +6,10 @@ TARGET_INPUT := build/test_input_validation
 TARGET_SIGNAL := build/test_signal_quality
 TARGET_PULSE := build/test_pulse_detector
 TARGET_STATE := build/test_state_machine
+TARGET_CSV_SMOKE := build/ppg_ibi_csv_smoke
+TARGET_RESOURCE_REPORT := build/ppg_ibi_resource_report
 
-.PHONY: test clean csv-smoke
+.PHONY: test clean csv-smoke resource-report
 
 test: $(TARGET_API) $(TARGET_INPUT) $(TARGET_SIGNAL) $(TARGET_PULSE) $(TARGET_STATE)
 	./$(TARGET_API)
@@ -28,9 +30,6 @@ $(TARGET_SIGNAL): tests/test_signal_quality.c src/ppg_ibi.c include/ppg_ibi.h in
 	@mkdir -p build
 	$(CC) $(CFLAGS) tests/test_signal_quality.c src/ppg_ibi.c -o $(TARGET_SIGNAL)
 
-clean:
-	rm -rf build
-
 $(TARGET_PULSE): tests/test_pulse_detector.c src/ppg_ibi.c include/ppg_ibi.h include/ppg_ibi_config.h src/ppg_ibi_internal.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) tests/test_pulse_detector.c src/ppg_ibi.c -o $(TARGET_PULSE)
@@ -39,12 +38,21 @@ $(TARGET_STATE): tests/test_state_machine.c src/ppg_ibi.c include/ppg_ibi.h incl
 	@mkdir -p build
 	$(CC) $(CFLAGS) tests/test_state_machine.c src/ppg_ibi.c -o $(TARGET_STATE)
 
-
-TARGET_CSV_SMOKE := build/ppg_ibi_csv_smoke
-
 $(TARGET_CSV_SMOKE): tools/ppg_ibi_csv_smoke.c src/ppg_ibi.c include/ppg_ibi.h include/ppg_ibi_config.h src/ppg_ibi_internal.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) tools/ppg_ibi_csv_smoke.c src/ppg_ibi.c -o $(TARGET_CSV_SMOKE)
 
+$(TARGET_RESOURCE_REPORT): tools/ppg_ibi_resource_report.c src/ppg_ibi.c include/ppg_ibi.h include/ppg_ibi_config.h src/ppg_ibi_internal.h
+	@mkdir -p build
+	$(CC) $(CFLAGS) tools/ppg_ibi_resource_report.c src/ppg_ibi.c -o $(TARGET_RESOURCE_REPORT)
+
 csv-smoke: $(TARGET_CSV_SMOKE)
+	@mkdir -p build/output
 	./$(TARGET_CSV_SMOKE)
+
+resource-report: $(TARGET_RESOURCE_REPORT)
+	@mkdir -p build/output
+	./$(TARGET_RESOURCE_REPORT)
+
+clean:
+	rm -rf build
