@@ -1,3 +1,49 @@
+# PR #12 复审追加修复要求 — M6 Fix 5
+
+PR #12 仍未通过。当前阻塞点是：IBI_OUT_OF_RANGE 分支没有完整保留 M6 语义。
+
+请在当前 M6 修复 PR 分支继续修复，并且不得回退 PR #12 已完成的 strict reject -> REACQUIRE 和 EVENT_READY 后 history 连续性修复。
+
+## 本轮只修复以下内容
+
+1. 修复 `ppg_ibi_process()` 中 `PPG_IBI_REJECT_IBI_OUT_OF_RANGE` 分支：
+   - 返回 `PPG_IBI_STATUS_NO_EVENT`；
+   - `event.reject_reason = PPG_IBI_REJECT_IBI_OUT_OF_RANGE`；
+   - `ctx->state = PPG_IBI_STATE_REACQUIRE`；
+   - `event->state = PPG_IBI_STATE_REACQUIRE`；
+   - 清理 detector history；
+   - 清理 last pulse；
+   - out-of-range 样本不得继续污染 detector prev/prev2 history。
+
+2. 在 `tests/test_state_machine.c` 中新增或恢复测试：
+   - 构造一个过短 IBI 或过长 IBI；
+   - 断言返回 `PPG_IBI_STATUS_NO_EVENT`；
+   - 断言 `event.reject_reason == PPG_IBI_REJECT_IBI_OUT_OF_RANGE`；
+   - 断言 `event.state == PPG_IBI_STATE_REACQUIRE`；
+   - 断言 `ctx.state == PPG_IBI_STATE_REACQUIRE`；
+   - 断言 detector history 和 last pulse 已清理。
+
+3. 保留 PR #12 已修复内容：
+   - `SATURATED / TIMESTAMP_GAP / SAMPLE_DROP / LOW_SIGNAL_QUALITY -> REACQUIRE`；
+   - strict reject 后 reset detector history / last pulse；
+   - `EVENT_READY` 返回前推进 detector history；
+   - `EVENT_READY` 后下一拍普通合法样本 `NO_EVENT`，且不是 `IBI_OUT_OF_RANGE`；
+   - 后续下一组合法 synthetic pulse 才能再次 `EVENT_READY`。
+
+## 禁止事项
+
+不得修改 public function signatures、`ppg_ibi_event_t`、status/state/reject enum、采样率、通道数、IBI 范围常量、`include/ppg_ibi_config.h`。
+
+不得引入 malloc/calloc/realloc、外部依赖、第三方 PPG/IBI/HR/HRV 算法库。
+
+## 必须运行并报告
+
+make test
+rg -n "\\b(malloc|calloc|realloc)\\s*\\(" include src tests
+rg -n "hr_bpm|rmssd|RMSSD" include src tests
+git diff -- include/ppg_ibi_config.h
+
+
 # PR #11 复审追加修复要求 — M6 Fix 4
 
 PR #11 仍未通过。当前阻塞点是：新增状态机测试中的“后续 synthetic pulse 触发第二次 EVENT_READY”场景未通过，且测试本身存在时间戳回退问题，无法有效验证 EVENT_READY 后 history 连续性。
