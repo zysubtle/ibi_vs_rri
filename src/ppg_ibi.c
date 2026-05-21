@@ -113,6 +113,9 @@ ppg_ibi_status_t ppg_ibi_reset(ppg_ibi_context_t *ctx)
     ctx->last_timestamp_ms = 0u;
     ctx->has_last_timestamp = 0u;
     ctx->state = PPG_IBI_STATE_INIT;
+    ctx->has_prev_sample = 0u;
+    ctx->has_prev2_sample = 0u;
+    ctx->has_last_pulse = 0u;
     return PPG_IBI_STATUS_OK;
 }
 
@@ -121,6 +124,8 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,
                                  ppg_ibi_event_t *event)
 {
     uint32_t interval_ms;
+    ppg_ibi_status_t status = PPG_IBI_STATUS_NO_EVENT;
+    uint8_t can_detect_candidate = 0u;
 
     if ((ctx == NULL) || (sample == NULL) || (event == NULL)) {
         return PPG_IBI_STATUS_INVALID_ARGUMENT;
@@ -134,6 +139,8 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,
 
     if (sample->allow_measure == 0u) {
         ctx->state = PPG_IBI_STATE_HOLD;
+        ctx->has_prev_sample = 0u;
+        ctx->has_prev2_sample = 0u;
         event->state = ctx->state;
         event->reject_reason = PPG_IBI_REJECT_ALLOW_MEASURE_FALSE;
         event->debug_flags |= PPG_IBI_DEBUG_FLAG_ALLOW_MEASURE_OFF;
@@ -172,17 +179,69 @@ ppg_ibi_status_t ppg_ibi_process(ppg_ibi_context_t *ctx,
             event->reject_reason = PPG_IBI_REJECT_LOW_SIGNAL_QUALITY;
             event->debug_flags |= PPG_IBI_DEBUG_FLAG_LOW_SIGNAL_QUALITY;
         }
+
+        if ((event->reject_reason == PPG_IBI_REJECT_NONE) &&
+            (event->selected_channel != PPG_IBI_SELECTED_CHANNEL_INVALID)) {
+            can_detect_candidate = (ctx->has_prev_sample != 0u) &&
+                                   (ctx->has_prev2_sample != 0u) &&
+                                   (ctx->prev2_selected_channel == ctx->prev_selected_channel) &&
+                                   (ctx->prev_selected_channel == event->selected_channel);
+
+            if (can_detect_candidate != 0u) {
+                int32_t current_raw = sample->ppg[event->selected_channel];
+                if ((ctx->prev_raw > ctx->prev2_raw) && (ctx->prev_raw >= current_raw)) {
+                    if (ctx->has_last_pulse == 0u) {
+                        ctx->has_last_pulse = 1u;
+                        ctx->last_pulse_timestamp_ms = ctx->prev_timestamp_ms;
+                    } else {
+                        uint32_t ibi_ms = ctx->prev_timestamp_ms - ctx->last_pulse_timestamp_ms;
+                        if ((ibi_ms >= ctx->config.min_ibi_ms) && (ibi_ms <= ctx->config.max_ibi_ms)) {
+                            ctx->beat_count += 1u;
+                            ctx->last_pulse_timestamp_ms = ctx->prev_timestamp_ms;
+                            event->timestamp_ms = ctx->prev_timestamp_ms;
+                            event->sample_index = ctx->prev_sample_index;
+                            event->ibi_ms = (uint16_t)ibi_ms;
+                            event->beat_count = ctx->beat_count;
+                            event->selected_channel = ctx->prev_selected_channel;
+                            event->signal_quality = ctx->prev_signal_quality;
+                            event->confidence = ctx->prev_signal_quality;
+                            status = PPG_IBI_STATUS_EVENT_READY;
+                        } else {
+                            event->reject_reason = PPG_IBI_REJECT_IBI_OUT_OF_RANGE;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (event->selected_channel != PPG_IBI_SELECTED_CHANNEL_INVALID) {
+            ctx->has_prev2_sample = ctx->has_prev_sample;
+            if (ctx->has_prev_sample != 0u) {
+                ctx->prev2_raw = ctx->prev_raw;
+                ctx->prev2_selected_channel = ctx->prev_selected_channel;
+                ctx->prev2_signal_quality = ctx->prev_signal_quality;
+                ctx->prev2_timestamp_ms = ctx->prev_timestamp_ms;
+                ctx->prev2_sample_index = ctx->prev_sample_index;
+            }
+
+            ctx->has_prev_sample = 1u;
+            ctx->prev_raw = sample->ppg[event->selected_channel];
+            ctx->prev_selected_channel = event->selected_channel;
+            ctx->prev_signal_quality = event->signal_quality;
+            ctx->prev_timestamp_ms = sample->timestamp_ms;
+            ctx->prev_sample_index = ctx->sample_counter;
+        }
     }
 
     ctx->last_timestamp_ms = sample->timestamp_ms;
     ctx->has_last_timestamp = 1u;
 
-    return PPG_IBI_STATUS_NO_EVENT;
+    return status;
 }
 
 const char *ppg_ibi_version(void)
 {
-    return "0.4.0-m4";
+    return "0.5.1-m5fix1";
 }
 
 size_t ppg_ibi_context_size(void)
