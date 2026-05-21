@@ -1,3 +1,39 @@
+# PR #20 复审追加修复要求 — M8 Fix 3
+
+PR #20 暂不通过。它修复了 resource-report 的预算判断和 docs/06_RESOURCE_BUDGET.md，但没有保留 PR #19 已经要求的 host 工具目录创建修复。
+
+## 必须修复
+
+1. `tools/ppg_ibi_csv_smoke.c` 不得调用 `system("mkdir -p ...")`。
+2. 如果 `stdlib.h` 仅用于 `system()`，请移除 `#include <stdlib.h>`。
+3. `Makefile` 的 `csv-smoke` target 必须在运行工具前执行：
+
+@mkdir -p build/output
+
+4. 保留 PR #20 已完成的 resource-report 修复：
+   - `context_size_within_budget=yes` 当 `context_size_bytes <= ram_budget_max_bytes`；
+   - `docs/06_RESOURCE_BUDGET.md` 保留 M8 资源复盘内容；
+   - `make resource-report` 输出 `build/output/resource_report.txt`。
+
+5. 不得回退：
+   - CSV 6 列 contract；
+   - `make csv-smoke` 输出 `ibi_events.csv` 与 `smoke_summary.txt`；
+   - public headers 不变；
+   - 不引入 HR / HRV / RMSSD 输出；
+   - 不引入动态内存。
+
+## 必须运行并报告
+
+make test
+make csv-smoke
+make resource-report
+rg -n "\\b(malloc|calloc|realloc)\\s*\\(" include src tests tools
+rg -n "hr_bpm|rmssd|RMSSD" include src tests tools
+git diff -- include/ppg_ibi.h include/ppg_ibi_config.h
+cat build/output/resource_report.txt
+cat build/output/smoke_summary.txt
+
+
 # PR #19 复审追加修复要求 — M8 Fix 2
 
 PR #19 暂不通过。当前阻塞点：
