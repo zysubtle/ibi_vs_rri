@@ -57,3 +57,7 @@
 1. 保留示例 CSV smoke test（`tests/fixtures/sample_ppg_20000.csv`）；
 2. 在无 gold standard 前，不引入准确性指标（MAE/RMSE/matched beats）；
 3. host 侧脚本仅允许 Python 标准库，不引入第三方依赖。
+
+## M5 修复轮 1 补充
+
+- 新增 `tests/test_pulse_detector.c`：覆盖首个候选不出事件、合法 IBI 触发 EVENT_READY、过短 IBI reject、selected channel 切换防伪峰、事件字段一致性。
