@@ -1,3 +1,48 @@
+# PR #21 复审追加修复要求 — M8 Fix 4
+
+PR #21 暂不通过。它修复了 host 工具目录创建问题，但没有保留 PR #20 中对 docs/06_RESOURCE_BUDGET.md 的 M8 资源预算收敛。
+
+## 必须修复
+
+1. 补齐 `docs/06_RESOURCE_BUDGET.md` 到 M8 视角，至少包含：
+   - RAM 预算：15–20 KB；
+   - 当前 `ppg_ibi_context_size()` 实测值，例如 `context_size_bytes=76`；
+   - `make resource-report` 命令；
+   - `build/output/resource_report.txt` 输出字段；
+   - `context_size_within_budget=yes` 的判断依据；
+   - 判断规则：`context_size_bytes <= ram_budget_max_bytes` 即为预算内；
+   - 无动态内存；
+   - 无递归；
+   - 当前 context size 远低于 RAM 上限；
+   - 无 FPU 但允许 float 的剩余风险；
+   - 后续如引入滑窗 / 更复杂 SQI / detector 缓存，需重新评估 RAM。
+
+2. 保留 PR #21 已完成内容：
+   - `tools/ppg_ibi_csv_smoke.c` 不调用 `system("mkdir -p ...")`；
+   - `Makefile` 的 `csv-smoke` target 在运行工具前创建 `build/output`；
+   - `Makefile` 的 `resource-report` target 在运行工具前创建 `build/output`；
+   - `tools/ppg_ibi_resource_report.c` 输出 `context_size_within_budget=yes` 当 `context_size_bytes <= ram_budget_max_bytes`。
+
+3. 不得回退：
+   - CSV 6 列 contract；
+   - `make csv-smoke` 输出 `ibi_events.csv` 与 `smoke_summary.txt`；
+   - `make resource-report` 输出 `resource_report.txt`；
+   - public headers 不变；
+   - 不引入 HR / HRV / RMSSD 输出；
+   - 不引入动态内存。
+
+## 必须运行并报告
+
+make test
+make csv-smoke
+make resource-report
+rg -n "\\b(malloc|calloc|realloc)\\s*\\(" include src tests tools
+rg -n "hr_bpm|rmssd|RMSSD" include src tests tools
+git diff -- include/ppg_ibi.h include/ppg_ibi_config.h
+cat build/output/resource_report.txt
+cat build/output/smoke_summary.txt
+
+
 # PR #20 复审追加修复要求 — M8 Fix 3
 
 PR #20 暂不通过。它修复了 resource-report 的预算判断和 docs/06_RESOURCE_BUDGET.md，但没有保留 PR #19 已经要求的 host 工具目录创建修复。
