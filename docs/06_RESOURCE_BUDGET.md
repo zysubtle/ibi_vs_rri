@@ -29,3 +29,9 @@
 1. 无 FPU 但允许 float：后续实现阶段需关注运行时间与功耗；
 2. RAM 15–20 KB：M3+ 引入缓冲后需持续复盘 context 增长；
 3. 当前仅 API 骨架，尚未覆盖真实算法资源负载。
+
+## M5 Fix 2 资源结论
+
+- `ppg_ibi_context_t` 增加 detector history 与 last pulse 字段，RAM 增长为常数级。
+- 仍为逐点 O(1) 计算，无动态内存、无递归、无大栈数组。
+- 无 FPU 场景下未引入额外浮点密集计算。

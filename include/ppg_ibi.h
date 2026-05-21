@@ -63,6 +63,23 @@ typedef struct {
     uint8_t has_last_timestamp;
     uint8_t is_initialized;
     ppg_ibi_state_t state;
+
+    uint8_t has_prev_sample;
+    uint8_t has_prev2_sample;
+    int32_t prev_raw;
+    int32_t prev2_raw;
+    uint8_t prev_selected_channel;
+    uint8_t prev2_selected_channel;
+    uint8_t prev_signal_quality;
+    uint8_t prev2_signal_quality;
+    uint32_t prev_timestamp_ms;
+    uint32_t prev2_timestamp_ms;
+    uint32_t prev_sample_index;
+    uint32_t prev2_sample_index;
+
+    uint8_t has_last_pulse;
+    uint32_t last_pulse_timestamp_ms;
+    uint32_t last_pulse_sample_index;
 } ppg_ibi_context_t;
 
 void ppg_ibi_config_default(ppg_ibi_config_t *config);

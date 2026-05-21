@@ -35,3 +35,8 @@
 3. 引入动态内存；
 4. 改变采样率或运动门控策略；
 5. 用于医疗诊断。
+
+## M5 Fix 2 风险补充
+
+- strict reject 路径（allow_measure=false、saturated、timestamp gap、sample drop、low quality）统一 reset detector history 与 last pulse，降低跨异常段伪 IBI 风险。
+- 最小 detector 仍为工程验证逻辑，无 gold standard，存在漏检/误检残余风险。
