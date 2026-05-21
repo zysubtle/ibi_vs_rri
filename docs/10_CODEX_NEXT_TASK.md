@@ -1,3 +1,78 @@
+# PR #14 复审追加修复要求 — M6 Fix 7
+
+PR #14 不通过。原因：PR #14 只更新了文档，没有包含 M6 Fix 6 所需的源码和状态机测试修复。
+
+本轮必须生成一个自包含的最终 M6 修复 PR，不能只改文档。
+
+## 必须修复源码
+
+在 `src/ppg_ibi.c` 中补齐：
+
+1. strict reject 分支：
+   - SATURATED
+   - TIMESTAMP_GAP
+   - SAMPLE_DROP
+   - LOW_SIGNAL_QUALITY
+
+   必须：
+   - 返回 `PPG_IBI_STATUS_NO_EVENT`
+   - 保留对应 `event.reject_reason`
+   - `ctx->state = PPG_IBI_STATE_REACQUIRE`
+   - `event->state = PPG_IBI_STATE_REACQUIRE`
+   - reset detector history
+   - reset last pulse
+   - strict reject 样本不得进入 prev/prev2 detector history
+
+2. `IBI_OUT_OF_RANGE` 分支：
+   - 返回 `PPG_IBI_STATUS_NO_EVENT`
+   - `event.reject_reason = PPG_IBI_REJECT_IBI_OUT_OF_RANGE`
+   - `ctx->state = PPG_IBI_STATE_REACQUIRE`
+   - `event->state = PPG_IBI_STATE_REACQUIRE`
+   - reset detector history
+   - reset last pulse
+   - out-of-range 样本不得污染 prev/prev2 history
+
+3. 合法 `EVENT_READY` 返回前：
+   - 推进 detector history，或实现等价机制
+   - 保证下一拍普通合法样本 `NO_EVENT`
+   - 保证下一拍不是 `IBI_OUT_OF_RANGE`
+   - 后续下一组合法 synthetic pulse 才能再次 `EVENT_READY`
+
+## 必须补齐测试
+
+新增或恢复 `tests/test_state_machine.c`，并覆盖：
+
+1. `allow_measure=false -> HOLD + reset`
+2. `SATURATED -> REACQUIRE + reset`
+3. `TIMESTAMP_GAP -> REACQUIRE + reset`
+4. `SAMPLE_DROP -> REACQUIRE + reset`
+5. `LOW_SIGNAL_QUALITY -> REACQUIRE + reset`
+6. `IBI_OUT_OF_RANGE -> REACQUIRE + reset`
+7. `EVENT_READY` 后下一拍普通合法样本为 `NO_EVENT` 且不是 `IBI_OUT_OF_RANGE`
+8. 后续下一组合法 synthetic pulse 才再次 `EVENT_READY`
+
+## 必须更新 Makefile
+
+`make test` 必须包含 `tests/test_state_machine.c` 对应测试目标。
+
+## 文档
+
+保留 PR #14 中对 `docs/07_TEST_STRATEGY.md` 和 `docs/08_RISK_REVIEW.md` 的文档对齐，但文档内容必须与实际源码和测试一致。
+
+## 禁止事项
+
+不得修改 public function signatures、`ppg_ibi_event_t`、status/state/reject enum、采样率、通道数、IBI 范围常量、`include/ppg_ibi_config.h`。
+
+不得引入 malloc/calloc/realloc、外部依赖或第三方 PPG/IBI/HR/HRV 算法库。
+
+## 必须运行并报告
+
+make test
+rg -n "\\b(malloc|calloc|realloc)\\s*\\(" include src tests
+rg -n "hr_bpm|rmssd|RMSSD" include src tests
+git diff -- include/ppg_ibi_config.h
+
+
 # PR #13 复审追加修复要求 — M6 Fix 6
 
 PR #13 仍未通过。它修复了 IBI_OUT_OF_RANGE -> REACQUIRE，但回退或缺失了完整 M6 要求中的另外两项：
