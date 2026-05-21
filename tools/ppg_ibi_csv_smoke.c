@@ -1,13 +1,11 @@
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "ppg_ibi.h"
 
 #define INPUT_PATH "tests/fixtures/sample_ppg_20000.csv"
-#define OUTPUT_DIR "build/output"
 #define OUTPUT_EVENTS "build/output/ibi_events.csv"
 #define OUTPUT_SUMMARY "build/output/smoke_summary.txt"
 #define LINE_BUF_SIZE 512
@@ -65,13 +63,16 @@ int main(void) {
         return 1;
     }
 
-    (void)system("mkdir -p " OUTPUT_DIR);
     events = fopen(OUTPUT_EVENTS, "w");
     summary = fopen(OUTPUT_SUMMARY, "w");
     if (events == NULL || summary == NULL) {
         fclose(in);
-        if (events != NULL) fclose(events);
-        if (summary != NULL) fclose(summary);
+        if (events != NULL) {
+            fclose(events);
+        }
+        if (summary != NULL) {
+            fclose(summary);
+        }
         fprintf(stderr, "failed to open output files\n");
         return 1;
     }
@@ -82,7 +83,9 @@ int main(void) {
     status = ppg_ibi_init(&ctx, &config);
     if (status != PPG_IBI_STATUS_OK) {
         fprintf(stderr, "init failed\n");
-        fclose(in); fclose(events); fclose(summary);
+        fclose(in);
+        fclose(events);
+        fclose(summary);
         return 1;
     }
 

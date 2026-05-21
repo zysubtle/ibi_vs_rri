@@ -1,4 +1,4 @@
-# Resource Budget v0.2
+# Resource Budget v0.3 (M8)
 
 ## 已确认预算
 
@@ -12,26 +12,30 @@
 | malloc/calloc/realloc | 禁止 |
 | MISRA 风格 | 需要 |
 
-## M2 资源冻结结论
+## M8 资源复盘结论
 
-1. `ppg_ibi_context_t` 由 caller 分配；
-2. 库内不使用动态内存；
-3. 通过 `ppg_ibi_context_size()` 暴露 context 大小供集成检查；
-4. 当前 API 骨架不引入大栈数组与递归。
+1. 当前 `ppg_ibi_context_size()` 实测：`context_size_bytes=76`（见 `make resource-report` 输出）。
+2. RAM 预算窗口：`ram_budget_min_bytes=15360`、`ram_budget_max_bytes=20480`。
+3. 预算判定规则：`context_size_bytes <= ram_budget_max_bytes` 即 `context_size_within_budget=yes`。
+4. 当前 `76 <= 20480`，因此 `context_size_within_budget=yes`，且 context size 远低于 RAM 上限。
+5. 当前无动态内存（无 `malloc/calloc/realloc`）。
+6. 当前无递归；核心处理维持逐点 O(1) 路径。
+7. 当前未引入不可控大栈数组。
 
-## M2 检查方式
+## M8 检查方式
 
-- 编译并运行 `make test`；
-- 运行关键字扫描，确认无 `malloc/calloc/realloc`。
+- 执行 `make resource-report`，读取 `build/output/resource_report.txt`：
+  - `context_size_bytes`
+  - `ram_budget_min_bytes`
+  - `ram_budget_max_bytes`
+  - `context_size_within_budget`
+  - `uses_dynamic_memory`
+  - `uses_recursion`
+- 执行动态内存关键字扫描：
+  - `rg -n "\b(malloc|calloc|realloc)\s*\(" include src tests tools`
 
-## 风险记录
+## 资源风险与后续复盘
 
-1. 无 FPU 但允许 float：后续实现阶段需关注运行时间与功耗；
-2. RAM 15–20 KB：M3+ 引入缓冲后需持续复盘 context 增长；
-3. 当前仅 API 骨架，尚未覆盖真实算法资源负载。
-
-## M5 Fix 2 资源结论
-
-- `ppg_ibi_context_t` 增加 detector history 与 last pulse 字段，RAM 增长为常数级。
-- 仍为逐点 O(1) 计算，无动态内存、无递归、无大栈数组。
-- 无 FPU 场景下未引入额外浮点密集计算。
+1. **无 FPU 但允许 float**：当前仍有无 FPU 下浮点开销风险，后续需结合目标 MCU 继续复盘运行时与功耗。
+2. **RAM 风险前瞻**：若后续引入滑窗、复杂 SQI 或 detector 缓存，context 可能增长，必须重新评估 RAM 预算。
+3. **当前阶段定位**：M8 仅做资源与工程收敛，不引入 HR/HRV/RMSSD 计算与新外部依赖。
