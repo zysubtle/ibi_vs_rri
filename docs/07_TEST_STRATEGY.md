@@ -61,3 +61,10 @@
 ## M5 Fix 2 测试补充
 
 - 新增 `tests/test_pulse_detector.c` 覆盖 channel switch、防跨异常段 IBI、allow_measure/strict reject reset、EVENT_READY 字段一致性与 TRACK 状态。
+
+## M6 新增测试：state machine / recovery
+
+- 新增 `tests/test_state_machine.c`，覆盖 `INIT->ACQUIRE`、`HOLD->REACQUIRE`、首拍只建 last pulse、第二拍 `EVENT_READY + TRACK`。
+- 覆盖 `TRACK` 后 strict reject（如 `SATURATED`）转入 `REACQUIRE`，并断言 detector / last pulse reset。
+- 覆盖 `IBI_OUT_OF_RANGE` 不输出 event 且进入非 `TRACK`（当前实现为 `REACQUIRE`）。
+- 覆盖 `EVENT_READY` 后 history 连续性（不重复同一 pulse、不立即 false IBI）。

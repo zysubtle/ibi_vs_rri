@@ -101,3 +101,14 @@
 - 新增最小三点历史 detector 语义：仅在连续 3 点 selected_channel 一致且中点为局部峰时形成 pulse candidate。
 - EVENT_READY 字段与被确认 candidate（prev 样本）严格对齐，不改变 event 字段与函数签名。
 - 允许扩展 `ppg_ibi_context_t` 内部历史字段，不改变公开 API。
+
+## M6 状态机与 reject 语义补充
+
+- `INIT` 在首个 `allow_measure=true` 且无 strict reject 的样本进入 `ACQUIRE`。
+- `allow_measure=false` 立即进入 `HOLD`，不输出 IBI，且清理 detector history 与 last pulse。
+- `HOLD` 恢复 `allow_measure=true` 后进入 `REACQUIRE`。
+- 在 `ACQUIRE/REACQUIRE` 中检测到第一个 pulse candidate 仅建立 last pulse，不输出 `EVENT_READY`。
+- 合法 IBI 事件输出时，`event.state` 与 `ctx->state` 都为 `TRACK`。
+- strict reject（`ALLOW_MEASURE_FALSE`/`SATURATED`/`TIMESTAMP_GAP`/`SAMPLE_DROP`/`LOW_SIGNAL_QUALITY`）不返回 `EVENT_READY`，并清理 detector history 与 last pulse；若非 HOLD 场景则进入 `REACQUIRE`。
+- `IBI_OUT_OF_RANGE` 不输出 event，状态切回 `REACQUIRE`（非 `TRACK`）。
+- `EVENT_READY` 返回前完成本轮 history 更新，避免重复 pulse 或下一拍立即 false IBI。
