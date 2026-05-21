@@ -1,17 +1,11 @@
-# M6 Fix 1 任务包
+# M6 Fix 2 任务包
 
-用途：补齐 M6 状态机 / 异常恢复测试覆盖。
+用途：替换仓库中的 `docs/10_CODEX_NEXT_TASK.md`，让 Codex 在当前 M6 修复 PR 分支上继续修复。
 
-建议只替换仓库中的：
+建议操作：
 
-```text
-docs/10_CODEX_NEXT_TASK.md
-```
-
-可选替换：
-
-```text
-CODEX_ONE_LINE_COMMAND.md
-```
-
-不要直接覆盖源码或其它文档。源码和测试应由 Codex 根据 `docs/10_CODEX_NEXT_TASK.md` 修改。
+1. 不要合并 PR #7 或 PR #8。
+2. 切到当前 M6 修复 PR 分支。
+3. 只复制本包的 `docs/10_CODEX_NEXT_TASK.md` 到仓库同名路径。
+4. 可选复制 `CODEX_ONE_LINE_COMMAND.md`。
+5. 让 Codex 执行一句话指令。

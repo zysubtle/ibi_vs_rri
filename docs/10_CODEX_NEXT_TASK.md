@@ -2,75 +2,70 @@
 
 ## 当前 Milestone
 
-M6 Fix 1：补齐状态机 / 异常恢复测试覆盖
+M6 Fix 2：补齐完整 M6 行为语义，确保最终 PR 可替代/完成 M6
 
 ## 背景
 
-M6 PR 已基本实现状态机、strict reject reset、EVENT_READY 字段对齐和基本可读性整理，但审查发现测试覆盖未完全满足 M6 任务文件的“至少覆盖”要求。
+M6 Fix 1 的 PR #8 补充了部分状态机测试，并修复 strict reject 后进入 REACQUIRE 的一部分逻辑。但审查发现：如果 PR #8 作为最终 M6 PR，它仍未完整包含 M6 的行为语义，尤其是：
 
-当前不要求重新设计算法。主要目标是补齐测试证明；如新增测试暴露行为缺陷，再做最小代码修复。
+1. `IBI_OUT_OF_RANGE` 后没有明确让 `ctx->state/event.state` 进入 `REACQUIRE`；
+2. `EVENT_READY` 返回前没有更新本轮当前样本到 detector history，可能导致下一拍重新检测同一个 pulse candidate 并触发立即 `IBI_OUT_OF_RANGE`；
+3. 当前测试只验证“不立即重复 EVENT_READY”，但没有验证“下一拍不会因同一 pulse 触发 `IBI_OUT_OF_RANGE` / false reject”；
+4. 如果 PR #8 替代 PR #7，则需要确保完整 M6 行为和文档均在同一个最终 PR 中。
+
+本轮目标不是重新设计算法，而是做最小修复，使最终 M6 PR 的行为与 M6 要求一致。
 
 ## 本轮任务目标
 
-请在当前 M6 PR 分支上继续修复，优先补齐 `tests/test_state_machine.c` 的测试覆盖。
+请在当前 M6 修复 PR 分支上继续修复。不要切回 dev 重新开始。
 
-必须覆盖以下场景：
+必须完成：
 
-1. `TRACK + allow_measure=false`
-   - 不返回 `EVENT_READY`；
-   - 状态进入 `HOLD`；
-   - `reject_reason=PPG_IBI_REJECT_ALLOW_MEASURE_FALSE`；
-   - detector history 与 last pulse 被 reset。
+1. 修复 `IBI_OUT_OF_RANGE` 状态语义
+   - 当检测到 pulse candidate 但 IBI 不在 `min_ibi_ms` 到 `max_ibi_ms` 范围内时：
+     - 返回 `PPG_IBI_STATUS_NO_EVENT`；
+     - `event.reject_reason = PPG_IBI_REJECT_IBI_OUT_OF_RANGE`；
+     - `ctx->state = PPG_IBI_STATE_REACQUIRE`；
+     - `event.state = PPG_IBI_STATE_REACQUIRE`；
+     - 不得保持 `TRACK`。
 
-2. `TRACK + TIMESTAMP_GAP`
-   - 构造小于 expected interval 的 timestamp 异常；
-   - 不返回 `EVENT_READY`；
-   - 状态进入 `REACQUIRE`；
-   - `reject_reason=PPG_IBI_REJECT_TIMESTAMP_GAP`；
-   - detector history 与 last pulse 被 reset。
+2. 修复 `EVENT_READY` 后 detector history 连续性
+   - 在合法 IBI 返回 `PPG_IBI_STATUS_EVENT_READY` 前，应先完成必要的 detector history 更新，或以等价方式保证：
+     - 下一拍普通合法样本不会重复使用同一个 candidate pulse；
+     - 下一拍普通合法样本不会立即产生 `EVENT_READY`；
+     - 下一拍普通合法样本也不应因为同一个 candidate 触发 `IBI_OUT_OF_RANGE` / false reject；
+     - 后续下一组合法 synthetic pulse 仍能正常输出新的 `EVENT_READY`。
 
-3. `TRACK + SAMPLE_DROP`
-   - 构造大于 expected interval 的 timestamp 异常；
-   - 不返回 `EVENT_READY`；
-   - 状态进入 `REACQUIRE`；
-   - `reject_reason=PPG_IBI_REJECT_SAMPLE_DROP`；
-   - detector history 与 last pulse 被 reset。
+3. 补强 `tests/test_state_machine.c`
+   - 必须新增或调整断言覆盖：
+     - `IBI_OUT_OF_RANGE` 后 `event.state == PPG_IBI_STATE_REACQUIRE`，`ctx.state == PPG_IBI_STATE_REACQUIRE`；
+     - 一次 `EVENT_READY` 后，紧接着输入一个普通合法样本，应为 `NO_EVENT`，且 `reject_reason` 不应是 `PPG_IBI_REJECT_IBI_OUT_OF_RANGE`；
+     - 后续下一组合法 synthetic pulse 到达时才输出新的 `EVENT_READY`；
+     - 保留 M6 Fix 1 已覆盖的 `TRACK + allow_measure=false`、`TRACK + TIMESTAMP_GAP`、`TRACK + SAMPLE_DROP`、`TRACK + LOW_SIGNAL_QUALITY`。
 
-4. `TRACK + LOW_SIGNAL_QUALITY`
-   - 使用 near-saturation 但未达到 24-bit 边界的 low-quality 样本；
-   - 不返回 `EVENT_READY`；
-   - 状态进入 `REACQUIRE`；
-   - `reject_reason=PPG_IBI_REJECT_LOW_SIGNAL_QUALITY`；
-   - detector history 与 last pulse 被 reset。
-
-5. `EVENT_READY` 后 history 连续性
-   - 在一次合法 `EVENT_READY` 后，继续输入下一组合法 synthetic pulse；
-   - 断言不会在下一拍立即重复输出同一 pulse；
-   - 断言下一组合法 pulse 到达时才输出新的 `EVENT_READY`；
-   - 新 event 的 `ibi_ms/timestamp_ms/sample_index/state/selected_channel/signal_quality/confidence` 必须合理且与 candidate 样本一致。
-
-6. 继续保留已有覆盖：
-   - `INIT -> ACQUIRE`；
-   - `allow_measure=false -> HOLD`；
-   - `HOLD -> REACQUIRE`；
-   - 首个 candidate 只建立 last pulse，不输出 IBI；
-   - 第二个合法 candidate 产生 `EVENT_READY + TRACK`；
-   - `IBI_OUT_OF_RANGE` 不输出 event 且进入 `REACQUIRE` 或明确非 `TRACK` 状态。
+4. 如果当前最终 PR 是 PR #8，而不是 PR #7
+   - 必须确保该 PR 包含完整 M6 需要的行为语义和文档说明；
+   - 不要依赖未合并的 PR #7 中的代码或文档。
 
 ## 允许修改范围
 
 允许修改：
 
 ```text
+src/ppg_ibi.c
 tests/test_state_machine.c
 tests/test_pulse_detector.c
-src/ppg_ibi.c
 Makefile
+docs/04_IO_CONTRACT.md
 docs/07_TEST_STRATEGY.md
 docs/08_RISK_REVIEW.md
 ```
 
-如果新增测试暴露行为缺陷，可对 `src/ppg_ibi.c` 做最小修复。
+如确需补充资源说明，可修改：
+
+```text
+docs/06_RESOURCE_BUDGET.md
+```
 
 ## 禁止修改范围
 
@@ -86,7 +81,7 @@ ppg_ibi_status_t / ppg_ibi_state_t / ppg_ibi_reject_reason_t enum 名称或语�
 allow_measure=false 立即不输出 IBI 的语义
 ```
 
-除非测试确实证明必须，否则不要修改 `include/ppg_ibi.h`。
+除非绝对必要，不要再扩展 `ppg_ibi_context_t`。
 
 ## 非目标
 
@@ -107,7 +102,7 @@ allow_measure=false 立即不输出 IBI 的语义
 
 ```bash
 make test
-rg -n "\b(malloc|calloc|realloc)\s*\(" include src tests
+rg -n "\\b(malloc|calloc|realloc)\\s*\\(" include src tests
 rg -n "hr_bpm|rmssd|RMSSD" include src tests
 git diff -- include/ppg_ibi_config.h
 ```
@@ -119,13 +114,14 @@ git diff -- include/ppg_ibi_config.h
 本轮通过标准：
 
 1. `make test` 通过；
-2. 新增测试覆盖所有本任务目标中的 TRACK strict reject 场景；
-3. 新增测试覆盖 EVENT_READY 后 history 连续性；
-4. strict reject 后 detector history 和 last pulse 均被清理；
-5. strict reject 样本不进入 detector prev/prev2 history；
-6. 不修改 public function signatures、event 字段、enum、配置常量；
-7. 不引入动态内存、外部依赖或第三方算法库；
-8. 文档补充 M6 Fix 1 测试覆盖说明，不写成长篇论文。
+2. `IBI_OUT_OF_RANGE` 明确进入 `REACQUIRE`，且测试覆盖；
+3. `EVENT_READY` 后下一拍不会重复输出同一 pulse，也不会因同一 pulse 立即触发 `IBI_OUT_OF_RANGE`；
+4. 后续下一组合法 synthetic pulse 仍能输出新的 `EVENT_READY`；
+5. strict reject 后 detector history 和 last pulse 均被清理；
+6. strict reject 样本不进入 detector prev/prev2 history；
+7. 不修改 public function signatures、event 字段、enum、配置常量；
+8. 不引入动态内存、外部依赖或第三方算法库；
+9. 文档补充 M6 Fix 2 说明即可，不写成长篇论文。
 
 ## Codex 输出摘要要求
 
