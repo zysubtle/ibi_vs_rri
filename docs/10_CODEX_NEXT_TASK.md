@@ -1,3 +1,28 @@
+# PR #19 复审追加修复要求 — M8 Fix 2
+
+PR #19 暂不通过。当前阻塞点：
+
+1. `tools/ppg_ibi_resource_report.c` 的 `context_size_within_budget` 判断逻辑错误；
+2. `docs/06_RESOURCE_BUDGET.md` 未完成 M8 资源预算收敛。
+
+## 必须修复
+
+### 1. 修复 resource report 预算判断
+
+当前 RAM 预算含义是：算法 context 必须不超过可用 RAM 预算上限。
+
+因此当：
+
+```text
+context_size_bytes=76
+ram_budget_max_bytes=20480
+
+应输出：
+
+context_size_within_budget=yes
+
+
+
 # PR #18 复审追加修复要求 — M8 Fix 1
 
 PR #18 暂不通过。当前阻塞点是：M8 文档收敛过度压缩，导致关键 IO Contract / 测试策略 / 风险约束不再具备权威性；同时 host 工具中仍使用 `system("mkdir -p ...")`，不利于 M8 的可移植性和 MISRA 风格收敛。
