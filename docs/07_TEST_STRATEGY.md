@@ -1,4 +1,4 @@
-# Test Strategy v0.4
+# Test Strategy v0.5
 
 ## 当前定位
 
@@ -29,7 +29,7 @@
 5. timestamp 小于预期触发 `TIMESTAMP_GAP`；
 6. timestamp 大于预期触发 `SAMPLE_DROP`（或对应 debug flag）；
 7. 24-bit signed PPG 边界值/越界触发 `SATURATED`；
-8. M3 不返回 `EVENT_READY`，且 `ibi_ms` 保持 0。
+8. M3 阶段不要求 `EVENT_READY`，`ibi_ms` 保持 0。
 
 ## M4 新增测试：signal quality / channel selection test
 
@@ -42,7 +42,7 @@
 3. near-saturation 低质量通道与普通有效通道混合时，优先选高质量通道；
 4. 全通道 low-quality 且未越界时，触发 `LOW_SIGNAL_QUALITY` 或低质量 debug flag；
 5. 任一路达到 24-bit 边界/越界时，触发 `SATURATED` 或 saturated debug flag；
-6. M4 仍不返回 `EVENT_READY`，`ibi_ms` 保持 0。
+6. M4 阶段不要求 `EVENT_READY`，`ibi_ms` 保持 0。
 
 ## 约束检查
 
@@ -61,3 +61,10 @@
 ## M5 Fix 2 测试补充
 
 - 新增 `tests/test_pulse_detector.c` 覆盖 channel switch、防跨异常段 IBI、allow_measure/strict reject reset、EVENT_READY 字段一致性与 TRACK 状态。
+
+
+## M6 Fix 6 测试补充
+
+- `tests/test_pulse_detector.c` 补齐 strict reject -> `REACQUIRE`（SATURATED/TIMESTAMP_GAP/SAMPLE_DROP/LOW_SIGNAL_QUALITY）断言，覆盖 `event.state`、`ctx.state`、`reject_reason`、detector history reset、last pulse reset。
+- 覆盖 `IBI_OUT_OF_RANGE -> REACQUIRE` 且 reset history / last pulse，并确保 out-of-range 样本不污染 detector prev/prev2。
+- 覆盖 `EVENT_READY` 返回前 history 推进：下一拍普通合法样本 `NO_EVENT` 且 `reject_reason != IBI_OUT_OF_RANGE`，随后仅下一组合法 synthetic pulse 才再次 `EVENT_READY`。
