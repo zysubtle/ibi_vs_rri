@@ -1,42 +1,39 @@
-# Risk Review v0.4
+# Risk Review v0.8 (M8 Final Consolidation)
 
 ## 风险分级
 
-- S0：必须 Owner 决策
+- S0：必须 Owner 决策，当前分支不得自行推进
 - S1：阻塞实现
-- S2：技术风险，记录但不阻塞当前里程碑
+- S2：技术风险，记录并持续复盘
 - S3：轻微问题
 
 ## 当前风险清单
 
 | ID | 风险 | 级别 | 当前处理 |
 |---|---|---|---|
-| R001 | 无 ECG / 人工标注 / gold standard | S2 | 当前只做 API/Smoke，不评估准确性 |
-| R002 | 50 Hz 采样率限制 IBI 精度 | S2 | M4 仍不输出真实 IBI，不宣称高精度 |
-| R003 | 无 FPU 但允许 float | S2 | M4 继续避免浮点重计算，后续仍需复盘运行时间/功耗 |
-| R004 | PPG 可饱和且无 invalid 标志 | S2 | M4 对边界/越界继续 SATURATED reject，并补充基础通道质量评分 |
-| R005 | 可能丢样 / timestamp gap | S2 | M3 既有 gap 与 sample drop 区分标记延续至 M4 |
-| R006 | 无 ACC，仅外部 allow_measure | S2 | `allow_measure=false` 立即停止 IBI 输出并进入 HOLD |
-| R007 | RAM 15–20 KB 预算 | S2 | M4 采用逐样本、无历史缓存 SQI，不引入动态内存 |
-| R008 | 当前无真实 IBI 检测 | S2 | 里程碑允许，M4 仅补充最小 SQI 与主通道选择 |
+| R001 | 无 ECG / 人工标注 / gold standard | S2 | 当前仅做工程闭环与契约检查，不评估准确性 |
+| R002 | 50Hz 采样率对逐搏 IBI 分辨率有上限 | S2 | 保持 50Hz 冻结，不宣称高精度 |
+| R003 | 无 FPU 但允许 float | S2 | 持续记录运行时间/功耗风险，避免浮点重计算扩张 |
+| R004 | 仅依赖外部 `allow_measure` 门控 | S2 | `allow_measure=false` 立即禁止 IBI 输出并进入 HOLD |
+| R005 | 最小三点 detector 在真实场景可能漏检/误检 | S2 | 明确仅工程验证语义，后续需真实标注数据复盘 |
+| R006 | 工程 `EVENT_READY` 易被误读为准确性结论 | S2 | 文档明确：只代表工程闭环，不代表临床准确性 |
 
-## M4 风险处理状态
+## 关键风险说明
 
-1. 基础 SQI：仅基于 raw range 和 near-saturation 阈值评分（0/20/80），不使用滤波、滑窗或频域方法；
-2. 主通道选择：每样本在 4 路中选最高质量通道，同分取最小 index，保证确定性；
-3. 低质量处理：在无更高优先级 reject 时，`signal_quality<threshold` 触发 `LOW_SIGNAL_QUALITY`；
-4. 饱和优先：任一路达到 24-bit 边界或越界仍优先触发 `SATURATED`；
-5. 算法边界：当前仍不输出真实 IBI，不返回 `EVENT_READY`。
+1. **无 gold standard 风险**：无法量化 MAE/RMSE/matched beats/coverage，当前测试不能证明准确性。
+2. **50Hz 采样限制**：时间量化误差天然存在，逐搏 IBI 精细度受限。
+3. **无 FPU + float 风险**：虽然允许 float，但在目标 MCU 可能带来时延与功耗压力。
+4. **外部门控风险**：`allow_measure` 质量依赖上游系统，门控错误会直接影响 IBI 输出可信度。
+5. **最小 detector 风险**：三点峰值策略对噪声、形态变化、运动干扰鲁棒性有限，存在漏检/误检。
+6. **工程语义风险**：`EVENT_READY` 是接口语义，不是医疗结论。
 
-## S0 触发条件（保持不变）
+## S0 触发条件（冻结）
 
-1. 改变公开 API 或输出字段语义；
-2. 引入第三方 PPG/IBI/HR/HRV 算法库；
-3. 引入动态内存；
-4. 改变采样率或运动门控策略；
-5. 用于医疗诊断。
+出现任一条即进入 S0，必须 Owner 决策：
 
-## M5 Fix 2 风险补充
-
-- strict reject 路径（allow_measure=false、saturated、timestamp gap、sample drop、low quality）统一 reset detector history 与 last pulse，降低跨异常段伪 IBI 风险。
-- 最小 detector 仍为工程验证逻辑，无 gold standard，存在漏检/误检残余风险。
+1. 改变 public API；
+2. 改变输出字段语义；
+3. 引入第三方 PPG/IBI/HR/HRV 算法库；
+4. 引入动态内存；
+5. 改变采样率、通道数、运动门控语义或状态机核心语义；
+6. 声称或用于医疗诊断。
